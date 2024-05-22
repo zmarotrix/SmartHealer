@@ -8,6 +8,7 @@ local libHC = AceLibrary("HealComm-1.0")
 local libIB = AceLibrary("ItemBonusLib-1.0")
 local libSC = AceLibrary("SpellCache-1.0")
 
+local _pfUIQuickCast_OnCast_orig
 function SmartHealer:OnEnable()
     if Clique and Clique.CastSpell then
         self:Hook(Clique, "CastSpell", "Clique_CastSpell")
@@ -23,6 +24,12 @@ function SmartHealer:OnEnable()
 
     if SlashCmdList and SlashCmdList.PFCAST then
         self:Hook(SlashCmdList, "PFCAST", "pfUI_PFCast")
+    end
+
+    if pfUIQuickCast and pfUIQuickCast.OnCast then
+        self:Hook(pfUIQuickCast, "OnCast", "pfUIQuickCast_OnCast")
+
+        _pfUIQuickCast_OnCast_orig = self.hooks[pfUIQuickCast]["OnCast"]
     end
 
     self:RegisterChatCommand({ "/heal" }, function(arg) SmartHealer:CastHeal(arg) end, "SMARTHEALER")
@@ -53,25 +60,25 @@ function SmartHealer:CastHeal(spellName)
     -- self:Print("spellname: ", spellName, type(spellName), string.len(spellName))
     if not spellName or string.len(spellName) == 0 or type(spellName) ~= "string" then
         return
-    else
-        spellName = string.gsub(spellName, "^%s*(.-)%s*$", "%1") --strip leading and trailing space characters
-        spellName = string.gsub(spellName, "%s+", " ")           --replace all space character with actual space
+    end
 
-        local _, _, arg = string.find(spellName, "[,;]%s*(.-)$") --tries to find overheal multiplier (number after spell name, separated by "," or ";")
-        if arg then
-            local _, _, percent = string.find(arg, "(%d+)%%")
-            if percent then
-                overheal = tonumber(percent) / 100
-            else
-                overheal = tonumber(arg)
-            end
+    spellName = string.gsub(spellName, "^%s*(.-)%s*$", "%1")     --strip leading and trailing space characters
+    spellName = string.gsub(spellName, "%s+", " ")               --replace all space character with actual space
 
-            spellName = string.gsub(spellName, "[,;].*", "") --removes everything after first "," or ";"
+    local _, _, arg = string.find(spellName, "[,;]%s*(.-)$")     --tries to find overheal multiplier (number after spell name, separated by "," or ";")
+    if arg then
+        local _, _, percent = string.find(arg, "(%d+)%%")
+        if percent then
+            overheal = tonumber(percent) / 100
+        else
+            overheal = tonumber(arg)
         end
 
-        if not overheal then
-            overheal = self.db.account.overheal
-        end
+        spellName = string.gsub(spellName, "[,;].*", "")     --removes everything after first "," or ";"
+    end
+
+    if not overheal then
+        overheal = self.db.account.overheal
     end
 
     local spell, rank = libSC:GetRanklessSpellName(spellName)
@@ -284,7 +291,7 @@ end
 
 -- Inspired by how pfui deduces the intended target inside the implementation of /pfcast
 -- Must be kept in sync with the pfui codebase   otherwise there might be cases where the
--- wrong target is assumed here thus leading to wrong healing rank calculations 
+-- wrong target is assumed here thus leading to wrong healing rank calculations
 
 -- Prepare a list of units that can be used via SpellTargetUnit
 local st_units = { [1] = "player", [2] = "target", [3] = "mouseover" }
@@ -329,12 +336,33 @@ function SmartHealer:pfUI_PFCast(msg)
     local spell, rank = libSC:GetRanklessSpellName(msg)
     if spell and rank == nil and libHC.Spells[spell] then
         local unitstr = getProperTargetBasedOnMouseOver()
+        -- print("** unitstr="..(unitstr or "nil"))
         rank = self:GetOptimalRank(msg, unitstr)
         if rank then
-            self.hooks[SlashCmdList]["PFCAST"](libSC:GetSpellNameText(spell, rank)) -- mission accomplished
+            local optimalHeal = libSC:GetSpellNameText(spell, rank)
+            -- print("** optimalHeal="..(optimalHeal or "nil"))
+            self.hooks[SlashCmdList]["PFCAST"](optimalHeal) -- mission accomplished
             return
         end
     end
 
     self.hooks[SlashCmdList]["PFCAST"](msg) -- fallback if we can't find optimal rank
+end
+
+function SmartHealer:pfUIQuickCast_OnCast(spell, proper_target)
+    print()
+
+    local spellName, rank = libSC:GetRanklessSpellName(spell)
+    if spellName and rank == nil and libHC.Spells[spellName] then
+        rank = self:GetOptimalRank(spellName, proper_target)
+        if rank then
+            spell = libSC:GetSpellNameText(spellName, rank)
+            if spell then
+                _pfUIQuickCast_OnCast_orig(spell, proper_target) -- mission accomplished
+                return
+            end
+        end
+    end
+
+    _pfUIQuickCast_OnCast_orig(spell, proper_target) -- fallback if we can't find optimal rank
 end

@@ -1,4 +1,5 @@
 # SmartHealer
+
 *for World of Warcraft 1.12.1 (Vanilla)*
 
 Autoscales heals in macros (/heal <spell_name>) and click heals for pfUI, Clique and ClassicMouseover.
