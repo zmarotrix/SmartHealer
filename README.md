@@ -5,7 +5,8 @@
 Autoscales heals in macros (/heal <spell_name>) and click heals for pfUI, Clique and ClassicMouseover.
 
 Scaling is done using HealComm-1.0 library (part of the package) or [TheoryCraft](https://wow.curseforge.com/projects/project-1644) (if present).  
-Addon checks missing HPs of target (or player if self cast), compares it with calculated healing done and selects the lowest rank needed to fully heal the target. If TheoryCraft is installed, addon also checks if you have enough mana to cast spell of selected rank. If you do not, it will try to use highest possible rank for which you have enough mana.
+Addon checks missing HPs of target (or player if self cast), compares it with calculated healing done and selects the lowest rank needed to fully heal the target. If TheoryCraft is
+installed, addon also checks if you have enough mana to cast spell of selected rank. If you do not, it will try to use highest possible rank for which you have enough mana.
 
 ## Commands:
 - `/heal <spell_name>[, overheal_multiplier]`  
@@ -17,8 +18,9 @@ Addon checks missing HPs of target (or player if self cast), compares it with ca
   If used without argument, prints current overheal multiplier.  
 
 *NOTE:*  
-Spell name shouldn't contain rank. If there is a rank, heal won't be scaled. It means that `/heal Healing Wave` will use rank as needed, but `/heal Healing Wave(Rank 3)` will always cast rank 3.  
-The same goes for supported addons. Do not specify rank in click actions (in case of Clique, spell must be set to "Max").  
+Spell name can contain a rank. If there is a rank, heal will be scaled but with the specified rank set a max-cap. This means that `/heal Healing Wave` will rank as needed all the way up to
+the maximum available rank that you know if necessary, but `/heal Healing Wave(Rank 3)` can only be ranked from 1 to 3.  
+  
 
 ## Installation
 1. Download **[Latest Version](https://github.com/melbaa/SmartHealer/archive/refs/heads/master.zip)**

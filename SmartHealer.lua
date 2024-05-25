@@ -8,7 +8,7 @@ local libHC = AceLibrary("HealComm-1.0")
 local libIB = AceLibrary("ItemBonusLib-1.0")
 local libSC = AceLibrary("SpellCache-1.0")
 
-local _pfUIQuickCast_OnCast_orig
+local _pfUIQuickCast_OnHeal_orig
 function SmartHealer:OnEnable()
     if Clique and Clique.CastSpell then
         self:Hook(Clique, "CastSpell", "Clique_CastSpell")
@@ -26,14 +26,18 @@ function SmartHealer:OnEnable()
         self:Hook(SlashCmdList, "PFCAST", "pfUI_PFCast")
     end
 
-    if pfUIQuickCast and pfUIQuickCast.OnCast then
-        self:Hook(pfUIQuickCast, "OnCast", "pfUIQuickCast_OnCast")
+    if pfUIQuickCast and pfUIQuickCast.OnHeal then
+        self:Hook(pfUIQuickCast, "OnHeal", "pfUIQuickCast_OnHeal")
 
-        _pfUIQuickCast_OnCast_orig = self.hooks[pfUIQuickCast]["OnCast"]
+        _pfUIQuickCast_OnHeal_orig = self.hooks[pfUIQuickCast]["OnHeal"]
     end
 
-    self:RegisterChatCommand({ "/heal" }, function(arg) SmartHealer:CastHeal(arg) end, "SMARTHEALER")
-    self:RegisterChatCommand({ "/sh_overheal" }, function(arg) SmartHealer:Overheal(arg) end, "SMARTOVERHEALER")
+    self:RegisterChatCommand({ "/heal" }, function(arg)
+        SmartHealer:CastHeal(arg)
+    end, "SMARTHEALER")
+    self:RegisterChatCommand({ "/sh_overheal" }, function(arg)
+        SmartHealer:Overheal(arg)
+    end, "SMARTOVERHEALER")
     self:Print('loaded')
 end
 
@@ -265,12 +269,16 @@ function SmartHealer:pfUI_ClickAction(pfui_uf, button)
                 spellName = pfUI_config.unitframes[key]
 
                 if spellName ~= "" then
-                    local spell, rank = libSC:GetRanklessSpellName(spellName)
+                    local spell, maxDesiredRank = libSC:GetRanklessSpellName(spellName)
 
-                    if spell and rank == nil and libHC.Spells[spell] then
-                        rank = self:GetOptimalRank(spellName, unit)
-                        if rank then
-                            pfUI_config.unitframes[key] = libSC:GetSpellNameText(spell, rank)
+                    if spell and maxDesiredRank == nil and libHC.Spells[spell] then
+                        local optimalRank = self:GetOptimalRank(spellName, unit)
+                        if optimalRank then
+                            if maxDesiredRank ~= nil then -- if the user has specified a rank then consider it as the max possible rank
+                                optimalRank = math.min(optimalRank, maxDesiredRank)
+                            end
+
+                            pfUI_config.unitframes[key] = libSC:GetSpellNameText(spell, optimalRank)
                         end
                     end
                 end
@@ -295,8 +303,12 @@ end
 
 -- Prepare a list of units that can be used via SpellTargetUnit
 local st_units = { [1] = "player", [2] = "target", [3] = "mouseover" }
-for i = 1, MAX_PARTY_MEMBERS do table.insert(st_units, "party" .. i) end
-for i = 1, MAX_RAID_MEMBERS do table.insert(st_units, "raid" .. i) end
+for i = 1, MAX_PARTY_MEMBERS do
+    table.insert(st_units, "party" .. i)
+end
+for i = 1, MAX_RAID_MEMBERS do
+    table.insert(st_units, "raid" .. i)
+end
 
 -- Try to find a valid (friendly) unitstring that can be used for
 -- SpellTargetUnit(unit) to avoid another target switch
@@ -333,36 +345,49 @@ local function getProperTargetBasedOnMouseOver()
 end
 
 function SmartHealer:pfUI_PFCast(msg)
-    local spell, rank = libSC:GetRanklessSpellName(msg)
-    if spell and rank == nil and libHC.Spells[spell] then
+    local spell, maxDesiredRank = libSC:GetRanklessSpellName(msg)
+    if spell and maxDesiredRank == nil and libHC.Spells[spell] then
         local unitstr = getProperTargetBasedOnMouseOver()
-        -- print("** unitstr="..(unitstr or "nil"))
-        rank = self:GetOptimalRank(msg, unitstr)
-        if rank then
-            local optimalHeal = libSC:GetSpellNameText(spell, rank)
-            -- print("** optimalHeal="..(optimalHeal or "nil"))
-            self.hooks[SlashCmdList]["PFCAST"](optimalHeal) -- mission accomplished
+        local optimalRank = SmartHealer:GetOptimalRank(msg, unitstr)
+        if optimalRank then
+            if maxDesiredRank ~= nil then -- if the user has specified a rank then consider it as the max possible rank
+                optimalRank = math.min(optimalRank, maxDesiredRank)
+            end
+            
+            local optimalHeal = libSC:GetSpellNameText(spell, optimalRank)
+            SmartHealer.hooks[SlashCmdList]["PFCAST"](optimalHeal) -- mission accomplished
             return
         end
     end
 
-    self.hooks[SlashCmdList]["PFCAST"](msg) -- fallback if we can't find optimal rank
+    SmartHealer.hooks[SlashCmdList]["PFCAST"](msg) -- fallback if we can't find optimal rank
 end
 
-function SmartHealer:pfUIQuickCast_OnCast(spell, proper_target)
-    print()
 
-    local spellName, rank = libSC:GetRanklessSpellName(spell)
-    if spellName and rank == nil and libHC.Spells[spellName] then
-        rank = self:GetOptimalRank(spellName, proper_target)
-        if rank then
-            spell = libSC:GetSpellNameText(spellName, rank)
-            if spell then
-                _pfUIQuickCast_OnCast_orig(spell, proper_target) -- mission accomplished
-                return
-            end
-        end
+local function tryGetOptimalSpell(spellName, maxDesiredRank, intendedTarget)
+    if not spellName or not libHC.Spells[spellName] then
+        return spellName -- fallback if the spell doesnt exist in the spellbook because for example the player hasnt specced for it 
     end
 
-    _pfUIQuickCast_OnCast_orig(spell, proper_target) -- fallback if we can't find optimal rank
+    local optimalRank = SmartHealer:GetOptimalRank(spellName, intendedTarget)
+    -- print("** [SmartHealer:pfUIQuickCast_OnHeal] maxDesiredRank='" .. tostring(maxDesiredRank) .. "'")
+
+    if not optimalRank then
+        return spellName -- fallback if we can't find optimal rank
+    end
+
+    if maxDesiredRank ~= nil then -- if the user has specified a rank then consider it as the max possible rank
+        optimalRank = math.min(optimalRank, maxDesiredRank)
+    end
+
+    return libSC:GetSpellNameText(spellName, optimalRank)
+end
+
+function SmartHealer:pfUIQuickCast_OnHeal(spell, proper_target)
+    -- print("** [SmartHealer:pfUIQuickCast_OnHeal] spell='" .. spell .. "'")
+
+    local spellName, maxDesiredRank = libSC:GetRanklessSpellName(spell)
+    -- print("** [SmartHealer:pfUIQuickCast_OnHeal] spellName='" .. tostring(spellName) .. "', maxDesiredRank='" .. tostring(maxDesiredRank) .. "'")
+
+    _pfUIQuickCast_OnHeal_orig(tryGetOptimalSpell(spellName, maxDesiredRank, proper_target), proper_target)
 end
