@@ -35,9 +35,11 @@ function SmartHealer:OnEnable()
     self:RegisterChatCommand({ "/heal" }, function(arg)
         SmartHealer:CastHeal(arg)
     end, "SMARTHEALER")
+
     self:RegisterChatCommand({ "/sh_overheal" }, function(arg)
         SmartHealer:Overheal(arg)
     end, "SMARTOVERHEALER")
+
     self:Print('loaded')
 end
 
@@ -274,7 +276,8 @@ function SmartHealer:pfUI_ClickAction(pfui_uf, button)
                     if spell and maxDesiredRank == nil and libHC.Spells[spell] then
                         local optimalRank = self:GetOptimalRank(spellName, unit)
                         if optimalRank then
-                            if maxDesiredRank ~= nil then -- if the user has specified a rank then consider it as the max possible rank
+                            if maxDesiredRank ~= nil then
+                                -- if the user has specified a rank then consider it as the max possible rank
                                 optimalRank = math.min(optimalRank, maxDesiredRank)
                             end
 
@@ -313,7 +316,7 @@ end
 -- Try to find a valid (friendly) unitstring that can be used for
 -- SpellTargetUnit(unit) to avoid another target switch
 local function getUnitString(unit)
-    for index, unitstr in pairs(st_units) do
+    for _, unitstr in pairs(st_units) do
         if UnitIsUnit(unit, unitstr) then
             return unitstr
         end
@@ -348,12 +351,17 @@ function SmartHealer:pfUI_PFCast(msg)
     local spell, maxDesiredRank = libSC:GetRanklessSpellName(msg)
     if spell and maxDesiredRank == nil and libHC.Spells[spell] then
         local unitstr = getProperTargetBasedOnMouseOver()
+        if unitstr == nil then
+            return
+        end
+
         local optimalRank = SmartHealer:GetOptimalRank(msg, unitstr)
         if optimalRank then
-            if maxDesiredRank ~= nil then -- if the user has specified a rank then consider it as the max possible rank
+            if maxDesiredRank ~= nil then
+                -- if the user has specified a rank then consider it as the max possible rank
                 optimalRank = math.min(optimalRank, maxDesiredRank)
             end
-            
+
             local optimalHeal = libSC:GetSpellNameText(spell, optimalRank)
             SmartHealer.hooks[SlashCmdList]["PFCAST"](optimalHeal) -- mission accomplished
             return
@@ -363,6 +371,9 @@ function SmartHealer:pfUI_PFCast(msg)
     SmartHealer.hooks[SlashCmdList]["PFCAST"](msg) -- fallback if we can't find optimal rank
 end
 
+--------------------------------------------------------------------------------------------------------------------------------------------
+-- Support for /pfquickcast:heal* family of commands - these commands are provided by the pfUI-QuickCast addon which is separate from pfUI
+--------------------------------------------------------------------------------------------------------------------------------------------
 
 local function tryGetOptimalSpell(spellName, maxDesiredRank, intendedTarget)
     if not spellName or not libHC.Spells[spellName] then
@@ -376,7 +387,8 @@ local function tryGetOptimalSpell(spellName, maxDesiredRank, intendedTarget)
         return spellName -- fallback if we can't find optimal rank
     end
 
-    if maxDesiredRank ~= nil then -- if the user has specified a rank then consider it as the max possible rank
+    if maxDesiredRank ~= nil then
+        -- if the user has specified a rank then consider it as the max possible rank
         optimalRank = math.min(optimalRank, maxDesiredRank)
     end
 
@@ -384,10 +396,7 @@ local function tryGetOptimalSpell(spellName, maxDesiredRank, intendedTarget)
 end
 
 function SmartHealer:pfUIQuickCast_OnHeal(spell, proper_target)
-    -- print("** [SmartHealer:pfUIQuickCast_OnHeal] spell='" .. spell .. "'")
-
     local spellName, maxDesiredRank = libSC:GetRanklessSpellName(spell)
-    -- print("** [SmartHealer:pfUIQuickCast_OnHeal] spellName='" .. tostring(spellName) .. "', maxDesiredRank='" .. tostring(maxDesiredRank) .. "'")
 
     _pfUIQuickCast_OnHeal_orig(tryGetOptimalSpell(spellName, maxDesiredRank, proper_target), proper_target)
 end
