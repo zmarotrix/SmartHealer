@@ -2,13 +2,20 @@
 
 *for World of Warcraft 1.12.1 (Vanilla)*
 
-Autoscales heals in macros (/heal <spell_name>) and click heals for pfUI, Clique and ClassicMouseover.
+Autoscales heals in macros (/heal <spell_name>) and click heals for:
 
-Scaling is done using HealComm-1.0 library (part of the package) or [TheoryCraft](https://wow.curseforge.com/projects/project-1644) (if present).  
+- pfUI (both via button-healing and via /pfcast)
+- pfUI-quickcast (/pfquickcast@heal*)
+- Clique
+- ClassicMouseover
+
+Scaling is done using HealComm-1.0 library (part of the package) or [TheoryCraft](https://wow.curseforge.com/projects/project-1644) (if present).
+
 Addon checks missing HPs of target (or player if self cast), compares it with calculated healing done and selects the lowest rank needed to fully heal the target. If TheoryCraft is
 installed, addon also checks if you have enough mana to cast spell of selected rank. If you do not, it will try to use highest possible rank for which you have enough mana.
 
 ## Commands:
+
 - `/heal <spell_name>[, overheal_multiplier]`  
   Used in macros to cast optimal rank of heal.  
   Overheal multiplier is optional and should be separated from spell name by comma "," or semicolon ";". It will override dafault overheal multiplier. See the next command.  
@@ -23,6 +30,7 @@ the maximum available rank that you know if necessary, but `/heal Healing Wave(R
   
 
 ## Installation
+
 1. Download **[Latest Version](https://github.com/melbaa/SmartHealer/archive/refs/heads/master.zip)**
 2. Unpack the Zip file
 3. Rename the folder "SmartHealer-master" to "SmartHealer"
@@ -30,5 +38,6 @@ the maximum available rank that you know if necessary, but `/heal Healing Wave(R
 5. Restart WoW
 
 ### Credits:
-Garkin's repo https://gitlab.com/AMGarkin/SmartHealer  
-Original idea of this addon is based on Ogrisch's [LazySpell](https://github.com/satan666/LazySpell).
+
+- Garkin's repo https://gitlab.com/AMGarkin/SmartHealer  
+- Original idea of this addon is based on Ogrisch's [LazySpell](https://github.com/satan666/LazySpell).
