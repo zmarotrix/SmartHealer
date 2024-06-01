@@ -178,7 +178,6 @@ function SmartHealer:GetOptimalRank(spell, unit, overheal)
     overheal = overheal or self.db.account.overheal
 
     local mana = UnitMana("player")
-    local spelldata = nil
     for i = max_rank, 1, -1 do
         spellData = TheoryCraft ~= nil and TheoryCraft_GetSpellDataByName(spell, i)
         if spellData then
@@ -375,28 +374,45 @@ end
 -- Support for /pfquickcast:heal* family of commands - these commands are provided by the pfUI-QuickCast addon which is separate from pfUI
 --------------------------------------------------------------------------------------------------------------------------------------------
 
-local function tryGetOptimalSpell(spellName, maxDesiredRank, intendedTarget)
-    if not spellName or not libHC.Spells[spellName] then
-        return spellName -- fallback if the spell doesnt exist in the spellbook because for example the player hasnt specced for it 
+local _pfGetSpellIndex = _G.pfUI.api.libspell.GetSpellIndex
+
+local function tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
+    if not spellNameRaw or not libHC.Spells[spellNameRaw] then
+        return nil, nil, nil -- fallback if the spell doesnt exist in the spellbook because for example the player hasnt specced for it 
     end
 
-    local optimalRank = SmartHealer:GetOptimalRank(spellName, intendedTarget)
+    local optimalRank = SmartHealer:GetOptimalRank(spellNameRaw, intendedTarget)
     -- print("** [SmartHealer:pfUIQuickCast_OnHeal] maxDesiredRank='" .. tostring(maxDesiredRank) .. "'")
 
     if not optimalRank then
-        return spellName -- fallback if we can't find optimal rank
+        return nil, nil, nil -- fallback if we can't find optimal rank
     end
 
     if maxDesiredRank ~= nil then
         -- if the user has specified a rank then consider it as the max possible rank
         optimalRank = math.min(optimalRank, maxDesiredRank)
     end
+    
+    local rankedSpell = libSC:GetSpellNameText(spellNameRaw, optimalRank)
 
-    return libSC:GetSpellNameText(spellName, optimalRank)
+    local rankedSpellId, rankedSpellBookType = _pfGetSpellIndex(spellNameRaw, "Rank " .. optimalRank)
+
+    return rankedSpell, rankedSpellId, rankedSpellBookType
 end
 
-function SmartHealer:pfUIQuickCast_OnHeal(spell, proper_target)
-    local spellName, maxDesiredRank = libSC:GetRanklessSpellName(spell)
+function SmartHealer:pfUIQuickCast_OnHeal(spell, spellId, spellBookType, proper_target)
+    local spellNameRaw, maxDesiredRank = libSC:GetRanklessSpellName(spell)
 
-    _pfUIQuickCast_OnHeal_orig(tryGetOptimalSpell(spellName, maxDesiredRank, proper_target), proper_target)
+    local rankedSpell, rankedSpellId, rankedSpellBookType = tryGetOptimalSpell(
+            spellNameRaw,
+            maxDesiredRank,
+            proper_target
+    )
+
+    _pfUIQuickCast_OnHeal_orig(
+            rankedSpell or spell,
+            rankedSpellId or spellId,
+            rankedSpellBookType or spellBookType,
+            proper_target
+    )
 end
