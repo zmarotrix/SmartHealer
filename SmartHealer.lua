@@ -406,9 +406,13 @@ local function tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
     
     local rankedSpell = libSC:GetSpellNameText(spellNameRaw, optimalRank)
     
-    local rankedSpellId, rankedSpellBookType = _pfGetSpellIndex(spellNameRaw, "Rank " .. rankIndex)
+    local rankedSpellId, spellBookType = _pfGetSpellIndex(spellNameRaw, "Rank " .. optimalRank)
 
-    return rankedSpell, rankedSpellId, rankedSpellBookType
+    print("** optimalRank=" .. tostring(optimalRank))
+    print("** spellNameRaw=" .. tostring(spellNameRaw))
+    print("** rankedSpellId=" .. tostring(rankedSpellId))
+
+    return rankedSpell, rankedSpellId, spellBookType
 end
 
 function SmartHealer:pfUIQuickCast_OnHeal(spell, spellId, spellBookType, proper_target)
