@@ -387,12 +387,6 @@ local _cachedRankStrings = (function()
     return ranks
 end)()
 
-local function cacheNewRankString(rankIndex)
-    rankString = "Rank " .. rankIndex
-    _cachedRankStrings[rankIndex] = rankString
-    return rankString
-end
-
 local function tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
     if not spellNameRaw or not libHC.Spells[spellNameRaw] then
         return nil, nil, nil -- fallback if the spell doesnt exist in the spellbook because for example the player hasnt specced for it 
@@ -411,10 +405,8 @@ local function tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
     end
     
     local rankedSpell = libSC:GetSpellNameText(spellNameRaw, optimalRank)
-
-    local rankString = _cachedRankStrings[optimalRank] or cacheNewRankString(optimalRank)
     
-    local rankedSpellId, rankedSpellBookType = _pfGetSpellIndex(spellNameRaw, rankString)
+    local rankedSpellId, rankedSpellBookType = _pfGetSpellIndex(spellNameRaw, "Rank " .. rankIndex)
 
     return rankedSpell, rankedSpellId, rankedSpellBookType
 end
