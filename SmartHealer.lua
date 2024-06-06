@@ -374,7 +374,10 @@ end
 -- Support for /pfquickcast:heal* family of commands - these commands are provided by the pfUI-QuickCast addon which is separate from pfUI
 --------------------------------------------------------------------------------------------------------------------------------------------
 
-local _pfGetSpellIndex = _G.pfUI.api.libspell.GetSpellIndex
+local _pfGetSpellIndex = pfUI
+        and pfUI.api
+        and pfUI.api.libspell
+        and pfUI.api.libspell.GetSpellIndex
 
 local _cachedRankStrings = (function()
     local ranks = {}
