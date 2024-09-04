@@ -408,10 +408,6 @@ local function tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
     
     local rankedSpellId, spellBookType = _pfGetSpellIndex(spellNameRaw, "Rank " .. optimalRank)
 
-    print("** optimalRank=" .. tostring(optimalRank))
-    print("** spellNameRaw=" .. tostring(spellNameRaw))
-    print("** rankedSpellId=" .. tostring(rankedSpellId))
-
     return rankedSpell, rankedSpellId, spellBookType
 end
 
