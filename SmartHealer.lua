@@ -2,7 +2,19 @@
 
 SmartHealer = AceLibrary("AceAddon-2.0"):new("AceHook-2.1", "AceConsole-2.0", "AceDB-2.0")
 SmartHealer:RegisterDB("SmartHealerDB")
-SmartHealer:RegisterDefaults("account", { overheal = 1 })
+SmartHealer:RegisterDefaults("account", {
+    overheal = 1,
+    categories = {
+        ["tanks"] = {
+            overheal = 1.25, 
+            players = {},
+        },
+        ["melees"] = {
+            overheal = 1.1,
+            players = {},
+        },
+    },
+})
 
 local libHC = AceLibrary("HealComm-1.0")
 local libIB = AceLibrary("ItemBonusLib-1.0")
@@ -37,7 +49,35 @@ function SmartHealer:OnEnable()
     end, "SMARTHEALER")
 
     self:RegisterChatCommand({ "/sh_overheal" }, function(arg)
-        SmartHealer:Overheal(arg)
+        local category, substitutionsCount1 = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%1")
+        local overheal, substitutionsCount2 = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%2")
+
+        if substitutionsCount1 == 1 then
+            category = string.gsub(category, "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
+            SmartHealer:ConfigureOverhealing(category, overheal)
+            return
+        end
+
+        category = nil
+        overheal, substitutionsCount2 = string.gsub(arg, "^%s*(%S+)%s*$", "%1")
+        if substitutionsCount2 == 1 then
+            SmartHealer:ConfigureOverhealing(overheal) -- set the default overhealing multiplier
+            return
+        end
+
+        SmartHealer:PrintCurrentConfiguration()
+    end, "SMARTOVERHEALER")
+
+    self:RegisterChatCommand({ "/sh_delete_all_categories" }, function()
+        SmartHealer:DeleteAllCategories()
+    end, "SMARTOVERHEALER")
+
+    self:RegisterChatCommand({ "/sh_delete_category" }, function(category)
+        SmartHealer:DeleteCategory(category)
+    end, "SMARTOVERHEALER")
+
+    self:RegisterChatCommand({ "/sh_clear_registry" }, function(optionalCategory)
+        SmartHealer:ClearRegistry(optionalCategory)
     end, "SMARTOVERHEALER")
 
     self:Print('loaded')
@@ -56,9 +96,9 @@ end
 -- by "," or ";" and it should be either number (1.1) or percentage (110%).
 --
 -- Examples:
--- SamrtHealer:CastSpell("Healing Wave")			--/heal Healing Wave
--- SamrtHealer:CastSpell("Healing Wave, 1.15")		--/heal Healing Wave, 1.15
--- SamrtHealer:CastSpell("Healing Wave;120%")		--/heal Healing Wave;120%
+-- SmartHealer:CastSpell("Healing Wave")			--/heal Healing Wave
+-- SmartHealer:CastSpell("Healing Wave, 1.15")		--/heal Healing Wave, 1.15
+-- SmartHealer:CastSpell("Healing Wave;120%")		--/heal Healing Wave;120%
 -------------------------------------------------------------------------------
 function SmartHealer:CastHeal(spellName)
     local overheal
@@ -125,30 +165,109 @@ function SmartHealer:CastHeal(spellName)
 end
 
 -------------------------------------------------------------------------------
--- Handler function for /sh_overheal
+-- Handler function for /sh_overheal [<category>] <overheal_multiplier>
 -------------------------------------------------------------------------------
--- Saves new default overheal multiplier, argument "value" should be either
--- string or number. String could contain number ("1.15") or percentage ("115%")
--- If "value" is not specified or invalid, function prints current overheal
--- multiplier.
+-- Sets the overheal multiplier% for the specified category of players. If only the
+-- multiplier% is specified then it sets the default overheal-multiplier%.
+-- If no argument is specified, it prints the current overheal multiplier%.
+--
+-- Examples:
+--
+-- /sh_overheal 1.15   -- sets the default overheal multiplier to 115%
+-- /sh_overheal 115%   -- same as above
+--
+-- /sh_overheal tanks 1.15   -- sets the overheal multiplier for tanks to 115%
+-- /sh_overheal tanks 115%   -- same as above
+--
+-- /sh_overheal     -- prints the current overheal multiplier for all categories
+--
 -------------------------------------------------------------------------------
-function SmartHealer:Overheal(value)
-    if value and type(value) == "string" then
-        value = string.gsub(value, "^%s*(.-)%s*$", "%1")
+function SmartHealer:ConfigureOverhealing(category, overheal)
+    if not overheal or overheal == '' then
+        overheal = category
+    end
+    
+    if overheal and type(overheal) == "string" then
+        overheal = string.gsub(overheal, "^%s*(.-)%s*$", "%1")
 
-        local _, _, percent = string.find(value, "(%d+)%%")
+        local _, _, percent = string.find(overheal, "(%d+)%%")
         if percent then
-            value = tonumber(percent) / 100
+            overheal = tonumber(percent) / 100
         else
-            value = tonumber(value)
+            overheal = tonumber(overheal)
         end
     end
 
-    if type(value) == "number" then
-        self.db.account.overheal = math.floor(value * 1000 + 0.5) / 1000
-    else
-        self:Print("Overheal multiplier: ", self.db.account.overheal, "(", self.db.account.overheal * 100, "%)")
+    if type(overheal) ~= "number" then
+        self:Print("Invalid overheal multiplier supplied (type '", type(overheal),"' is not a number)")
+        return
     end
+
+    overheal = math.floor(overheal * 1000 + 0.5) / 1000
+    if category == nil then
+        self.db.account.overheal = overheal
+        return
+    end
+
+    self.db.account.categories[category] = self.db.account.categories[category] or {
+        players = {},
+        overheal = 1
+    }
+
+    self.db.account.categories[category].overheal = overheal
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_overheal (without any parameters)
+-------------------------------------------------------------------------------
+function SmartHealer:PrintCurrentConfiguration()
+    self:Print("Overheal multipliers:")
+    self:Print("- default: ", self.db.account.overheal, "(", self.db.account.overheal * 100, "%)")
+    for cat, config in pairs(self.db.account.categories) do
+        self:Print("- category '", cat, "': ", config.overheal, "(", config.overheal * 100, "%) -> ", table.getn(config.players) == 0 and "(no players registered)" or table.concat(config.players, ", "))
+    end
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_delete_all_categories
+-------------------------------------------------------------------------------
+function SmartHealer:DeleteAllCategories()
+    self.db.account.categories = {}
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_delete_category <category>
+-------------------------------------------------------------------------------
+function SmartHealer:DeleteCategory(category)
+    if not category or category == '' then
+        self:Print("Error: Category name not specified")
+        return
+    end
+    
+    category = string.gsub(category, "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
+    
+    self.db.account.categories[category] = nil
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_clear_registry [<category>]
+-------------------------------------------------------------------------------
+function SmartHealer:ClearRegistry(optionalCategory)
+    if not optionalCategory or optionalCategory == '' then -- clear all registered players in all categories
+        for _, config in pairs(self.db.account.categories) do
+            config.players = {}
+        end
+        return
+    end
+
+    optionalCategory = string.gsub(optionalCategory, "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
+    local categoryConfig = self.db.account.categories[optionalCategory]
+    if not categoryConfig then
+        self:Print("Error: Category '", optionalCategory, "' not found")
+        return
+    end
+
+    categoryConfig.players = {}
 end
 
 -------------------------------------------------------------------------------
@@ -378,14 +497,6 @@ local _pfGetSpellIndex = pfUI
         and pfUI.api
         and pfUI.api.libspell
         and pfUI.api.libspell.GetSpellIndex
-
-local _cachedRankStrings = (function()
-    local ranks = {}
-    for i = 1, 16 do -- 16 ranks should be enough for everything
-        ranks[i] = "Rank " .. i
-    end
-    return ranks
-end)()
 
 local function tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
     if not spellNameRaw or not libHC.Spells[spellNameRaw] then
