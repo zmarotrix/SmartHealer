@@ -4,6 +4,7 @@ SmartHealer = AceLibrary("AceAddon-2.0"):new("AceHook-2.1", "AceConsole-2.0", "A
 SmartHealer:RegisterDB("SmartHealerDB")
 SmartHealer:RegisterDefaults("account", {
     overheal = 1,
+
     categories = {
         ["tanks"] = {
             overheal = 1.25,
@@ -13,6 +14,10 @@ SmartHealer:RegisterDefaults("account", {
             overheal = 1.1,
             players = {},
         },
+    },
+    
+    registeredPlayers = {
+        -- ["playerName"] = categoryConfig        
     },
 })
 
@@ -208,23 +213,16 @@ function SmartHealer:TogglePlayerInCategory(category, optionalPlayerName)
         return
     end
 
-    local playerGetsMoved = false
-    for cat in pairs(self.db.account.categories) do
-        local gotRemoved = SmartHealer:TryRemovePlayerFromCategory(cat, playerName)
-        if gotRemoved then
-            if cat == category then
-                -- if the player was in the category then we just toggled him off and we are done
-                self:Print("Removed '", playerName, "' from category '", category, "'")
-                return
-            end
-
-            playerGetsMoved = true
-            break -- if the player was in another category then we need to add/move him to the new category
-        end
+    local preExistingCategory = SmartHealer:TryRemovePlayerFromPreExistingCategory(playerName)
+    if preExistingCategory ~= nil and preExistingCategory.categoryName == category then
+        self:Print("Removed '", playerName, "' from category '", preExistingCategory.categoryName, "'")
+        return
     end
 
     table.insert(categoryConfig.players, playerName)
-    if playerGetsMoved then
+    self.db.account.registeredPlayers[playerName] = categoryConfig
+    
+    if preExistingCategory ~= nil then
         self:Print("Moved '", playerName, "' to category '", category, "'")
         return
     end
@@ -233,32 +231,26 @@ function SmartHealer:TogglePlayerInCategory(category, optionalPlayerName)
 end
 
 -- utility function to remove a player from a category
-function SmartHealer:TryRemovePlayerFromCategory(category, playerName)
-    if not category or category == '' then
-        self:Print(" [Error] Category name not specified")
-        return false
-    end
-
-    category = string.gsub(category, "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
-    local categoryConfig = self.db.account.categories[category]
-    if not categoryConfig then
-        self:Print(" [Error] Category '", category, "' not found")
-        return false
-    end
-
+function SmartHealer:TryRemovePlayerFromPreExistingCategory(playerName)
     if not playerName or playerName == '' then
         self:Print(" [Error] Player name not specified")
-        return false
+        return nil
     end
 
+    local categoryConfig = self.db.account.registeredPlayers[playerName]
+    if categoryConfig == nil then
+        return nil
+    end
+
+    self.db.account.registeredPlayers[playerName] = nil    
     for index, existingPlayerName in ipairs(categoryConfig.players) do
         if playerName == existingPlayerName then
             table.remove(categoryConfig.players, index)
-            return true
+            return categoryConfig.categoryName
         end
     end
 
-    return false
+    return categoryConfig.categoryName
 end
 
 -------------------------------------------------------------------------------
@@ -401,23 +393,18 @@ function SmartHealer:GetOptimalRank(spell, unit, possibleExplicitOverheal)
     
     local missing = UnitHealthMax(unit) - UnitHealth(unit)
     local max_rank = tonumber(libSC.data[spell].Rank)
-    local rank = max_rank
 
+    local rank = max_rank
     local overheal = possibleExplicitOverheal
     if not overheal then
-        local category = nil
+        local assignedCategoryConfig = nil
         local unitName = UnitName(unit)
         if unitName then
-            for cat, config in pairs(self.db.account.categories) do -- todo   this can be optimized by using something like self.db.account.registeredPlayers[unitName]  
-                if table.contains(config.players, unitName) then
-                    category = cat
-                    break
-                end
-            end
+            assignedCategoryConfig = self.db.account.registeredPlayers[unitName]
         end
 
-        if category then
-            overheal = self.db.account.categories[category].overheal
+        if assignedCategoryConfig then
+            overheal = assignedCategoryConfig.overheal
         else
             overheal = self.db.account.overheal
         end
