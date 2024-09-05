@@ -113,7 +113,7 @@ end
 -- SmartHealer:CastSpell("Healing Wave;120%")		--/heal Healing Wave;120%
 -------------------------------------------------------------------------------
 function SmartHealer:CastHeal(spellName)
-    local overheal
+    local possibleExplicitOverheal
 
     -- self:Print("spellname: ", spellName, type(spellName), string.len(spellName))
     if not spellName or string.len(spellName) == 0 or type(spellName) ~= "string" then
@@ -127,16 +127,12 @@ function SmartHealer:CastHeal(spellName)
     if arg then
         local _, _, percent = string.find(arg, "(%d+)%%")
         if percent then
-            overheal = tonumber(percent) / 100
+            possibleExplicitOverheal = tonumber(percent) / 100
         else
-            overheal = tonumber(arg)
+            possibleExplicitOverheal = tonumber(arg)
         end
 
         spellName = string.gsub(spellName, "[,;].*", "")     --removes everything after first "," or ";"
-    end
-
-    if not overheal then
-        overheal = self.db.account.overheal
     end
 
     local spell, rank = libSC:GetRanklessSpellName(spellName)
@@ -156,7 +152,7 @@ function SmartHealer:CastHeal(spellName)
     end
 
     if spell and rank == nil and libHC.Spells[spell] then
-        rank = self:GetOptimalRank(spell, unit, overheal)
+        rank = self:GetOptimalRank(spell, unit, possibleExplicitOverheal)
         if rank then
             spellName = libSC:GetSpellNameText(spell, rank)
         end
@@ -388,7 +384,7 @@ end
 -- unit	 	- unitId ("player", "target", ...)
 -- overheal	- overheal multiplier. If nil, then using self.db.account.overheal.
 -------------------------------------------------------------------------------
-function SmartHealer:GetOptimalRank(spell, unit, overheal)
+function SmartHealer:GetOptimalRank(spell, unit, possibleExplicitOverheal)
     if not libSC.data[spell] then
         self:Print('smartheal rank not found')
         return
@@ -402,10 +398,30 @@ function SmartHealer:GetOptimalRank(spell, unit, overheal)
         bonus = bonus + buffpower
         mod = mod * buffmod
     end
+    
     local missing = UnitHealthMax(unit) - UnitHealth(unit)
     local max_rank = tonumber(libSC.data[spell].Rank)
     local rank = max_rank
-    overheal = overheal or self.db.account.overheal
+
+    local overheal = possibleExplicitOverheal
+    if not overheal then
+        local category = nil
+        local unitName = UnitName(unit)
+        if unitName then
+            for cat, config in pairs(self.db.account.categories) do -- todo   this can be optimized by using something like self.db.account.registeredPlayers[unitName]  
+                if table.contains(config.players, unitName) then
+                    category = cat
+                    break
+                end
+            end
+        end
+
+        if category then
+            overheal = self.db.account.categories[category].overheal
+        else
+            overheal = self.db.account.overheal
+        end
+    end
 
     local mana = UnitMana("player")
     for i = max_rank, 1, -1 do
