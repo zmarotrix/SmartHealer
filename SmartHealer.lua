@@ -8,18 +8,18 @@ SmartHealer:RegisterDefaults("account", {
     categories = {
         ["maintanks"] = {
             overheal = 1.25,
-            players = {},
+            categoryName = "maintanks",
         },
         ["offtanks"] = {
-            overheal = 1.15,
-            players = {},
+            overheal = 1.20,
+            categoryName = "offtanks",
         },
         ["melees"] = {
-            overheal = 1.1,
-            players = {},
+            overheal = 1.15,
+            categoryName = "melees",
         },
     },
-    
+
     registeredPlayers = {
         -- ["playerName"] = categoryConfig        
     },
@@ -86,19 +86,19 @@ function SmartHealer:OnEnable()
         end
 
         SmartHealer:TogglePlayerInCategory(arg) -- will get the player name from the mouseover target
-    end, "SMARTHEALER_TOGGLE_PLAYER_IN_CATEGORY")
+    end, "SMARTHEALERTOGGLEPLAYERINCATEGORY")
 
     self:RegisterChatCommand({ "/sh_reset_all_categories" }, function()
         SmartHealer:ResetAllCategoriesToDefaultOnes()
-    end, "SMARTHEALER_RESET_ALL_CATEGORIES")
+    end, "SMARTHEALERRESETALLCATEGORIES")
 
     self:RegisterChatCommand({ "/sh_delete_category" }, function(category)
         SmartHealer:DeleteCategory(category)
-    end, "SMARTHEALER_DELETE_CATEGORY")
+    end, "SMARTHEALERDELETECATEGORY")
 
-    self:RegisterChatCommand({ "/sh_clear_registry" }, function(optionalCategory)
+    self:RegisterChatCommand({ "/sh_clear_players_registry" }, function(optionalCategory)
         SmartHealer:ClearRegistry(optionalCategory)
-    end, "SMARTHEALER_CLEAR_REGISTRY")
+    end, "SMARTHEALERCLEARPLAYERSREGISTRY")
 
     self:Print('loaded')
 end
@@ -125,7 +125,7 @@ function SmartHealer:CastHeal(spellName)
         return
     end
 
-    spellName = string.gsub(strtrim(spellName), "%s+", " ") -- trim first and then replace all space character with a single space character
+    spellName = string.gsub(strtrim(spellName), "%s+", " ") -- trim the spellname and then replace all space character with a single space character
 
     local _, _, explicitOverhealMultiplier = string.find(spellName, "[,;]%s*(.-)$") -- tries to find overheal multiplier (number after spell name, separated by "," or ";")
 
@@ -178,6 +178,15 @@ function SmartHealer:CastHeal(spellName)
     end
 end
 
+local function getUnitIdFromMouseHoverOverPartyOrRaidMember()
+    local frame = GetMouseFocus()
+    if frame.label and frame.id then
+        return frame.label .. frame.id
+    end
+
+    return nil
+end
+
 -------------------------------------------------------------------------------------------
 -- Handler function for /sh_toggle_player_in_category <category> [<optional_player_name>]
 -------------------------------------------------------------------------------------------
@@ -187,25 +196,31 @@ end
 -- If the player is already in the category specified then he's removed from it.
 --
 -- If no player name is specified, then the player that's currently being hovered over is
--- selected and if no player is hovered over then the player that's currently targeted is selected.
+-- selected.
 --
 -------------------------------------------------------------------------------
-function SmartHealer:TogglePlayerInCategory(category, optionalPlayerName)
-    category = strtrim(category or "")
-    if category == "" then
+function SmartHealer:TogglePlayerInCategory(categoryName, optionalPlayerName)
+    categoryName = strtrim(categoryName or "")
+    if categoryName == "" then
         self:Print(" [Error] Category name not specified")
         return
     end
 
-    local categoryConfig = self.db.account.categories[category]
+    local categoryConfig = self.db.account.categories[categoryName]
     if not categoryConfig then
-        self:Print(" [Error] Category '", category, "' not found")
+        self:Print(" [Error] Category '", categoryName, "' not found")
         return
     end
 
     local playerName = strtrim(optionalPlayerName or "")
     if playerName == "" then
-        playerName = UnitName("mouseover") or UnitName("target")
+        local mouseHoverOverUnitId = getUnitIdFromMouseHoverOverPartyOrRaidMember()
+        if mouseHoverOverUnitId == nil then
+            self:Print(" [Info] No explicit player-name specified and no party/raid member is currently being hovered over with the mouse - nothing to do ...")
+            return
+        end
+
+        playerName = UnitName(mouseHoverOverUnitId)
     end
 
     if not playerName or playerName == "" then
@@ -213,21 +228,15 @@ function SmartHealer:TogglePlayerInCategory(category, optionalPlayerName)
         return
     end
 
-    local preExistingCategory = SmartHealer:TryRemovePlayerFromPreExistingCategory(playerName)
-    if preExistingCategory ~= nil and preExistingCategory.categoryName == category then
-        self:Print("Removed '", playerName, "' from category '", preExistingCategory.categoryName, "'")
+    local preExistingCategoryConfig = SmartHealer:TryRemovePlayerFromPreExistingCategory(playerName)
+    if preExistingCategoryConfig ~= nil and preExistingCategoryConfig.categoryName == categoryName then
+        self:Print("[-] Removed '", playerName, "' from category '", preExistingCategoryConfig.categoryName, "'")
         return
     end
 
-    table.insert(categoryConfig.players, playerName)
     self.db.account.registeredPlayers[playerName] = categoryConfig
-    
-    if preExistingCategory ~= nil then
-        self:Print("Moved '", playerName, "' to category '", category, "'")
-        return
-    end
 
-    self:Print("Added '", playerName, "' into category '", category, "'")
+    self:Print((preExistingCategoryConfig ~= nil and "[->] Moved" or "[+] Added"), " '", playerName, "' to category '", categoryName, "'")
 end
 
 -- utility function to remove a player from a category
@@ -242,15 +251,9 @@ function SmartHealer:TryRemovePlayerFromPreExistingCategory(playerName)
         return nil
     end
 
-    self.db.account.registeredPlayers[playerName] = nil    
-    for index, existingPlayerName in ipairs(categoryConfig.players) do
-        if playerName == existingPlayerName then
-            table.remove(categoryConfig.players, index)
-            return categoryConfig.categoryName
-        end
-    end
+    self.db.account.registeredPlayers[playerName] = nil
 
-    return categoryConfig.categoryName
+    return categoryConfig
 end
 
 -------------------------------------------------------------------------------
@@ -274,9 +277,9 @@ end
 -- /sh_overheal     -- prints the current overheal multiplier for all categories
 --
 -------------------------------------------------------------------------------
-function SmartHealer:ConfigureOverhealing(category, overheal)
+function SmartHealer:ConfigureOverhealing(categoryName, overheal)
     if not overheal or overheal == "" then
-        overheal = category
+        overheal = categoryName
     end
 
     if overheal and type(overheal) == "string" then
@@ -297,18 +300,18 @@ function SmartHealer:ConfigureOverhealing(category, overheal)
 
     overheal = math.floor(overheal * 1000 + 0.5) / 1000
 
-    category = strtrim(category or "")
-    if category == "" then
+    categoryName = strtrim(categoryName or "")
+    if categoryName == "" then
         self.db.account.overheal = overheal
         return
     end
-    
-    self.db.account.categories[category] = self.db.account.categories[category] or {
-        players = {},
+
+    self.db.account.categories[categoryName] = self.db.account.categories[categoryName] or {
+        categoryName = categoryName,
         overheal = 1
     }
 
-    self.db.account.categories[category].overheal = overheal
+    self.db.account.categories[categoryName].overheal = overheal
 end
 
 -------------------------------------------------------------------------------
@@ -317,8 +320,19 @@ end
 function SmartHealer:PrintCurrentConfiguration()
     self:Print("Overheal multipliers:")
     self:Print("- default: ", self.db.account.overheal, "(", self.db.account.overheal * 100, "%)")
-    for cat, config in pairs(self.db.account.categories) do
-        self:Print("- category '", cat, "': ", config.overheal, "(", config.overheal * 100, "%) -> ", table.getn(config.players) == 0 and "(no players registered)" or table.concat(config.players, ", "))
+    for categoryName, config in pairs(self.db.account.categories) do
+        local playerNamesForCategory = {}
+        for playerName, categoryConfig in pairs(self.db.account.registeredPlayers) do
+            if categoryConfig.categoryName == categoryName then
+                table.insert(playerNamesForCategory, playerName)
+            end
+        end
+
+        self:Print(
+                "- category '", categoryName, "': ",
+                config.overheal, "(", config.overheal * 100, "%) -> ",
+                table.getn(playerNamesForCategory) == 0 and "(no players registered)" or table.concat(playerNamesForCategory, ", ")
+        )
     end
 end
 
@@ -326,18 +340,20 @@ end
 -- Handler function for /sh_reset_all_categories
 -------------------------------------------------------------------------------
 function SmartHealer:ResetAllCategoriesToDefaultOnes()
+    SmartHealer:ClearRegistry() -- remove all players from all categories
+
     self.db.account.categories = {
         ["maintanks"] = {
             overheal = 1.25,
-            players = {},
+            categoryName = "maintanks",
         },
         ["offtanks"] = {
-            overheal = 1.15,
-            players = {},
+            overheal = 1.20,
+            categoryName = "offtanks",
         },
         ["melees"] = {
-            overheal = 1.1,
-            players = {},
+            overheal = 1.15,
+            categoryName = "melees",
         },
     }
 end
@@ -356,25 +372,23 @@ function SmartHealer:DeleteCategory(category)
 end
 
 -------------------------------------------------------------------------------
--- Handler function for /sh_clear_registry [<category>]
+-- Handler function for /sh_clear_players_registry [<category>]
 -------------------------------------------------------------------------------
-function SmartHealer:ClearRegistry(optionalCategory)
-    optionalCategory = strtrim(optionalCategory)
-    if optionalCategory == "" then
-        -- clear all registered players in all categories
-        for _, config in pairs(self.db.account.categories) do
-            config.players = {}
+function SmartHealer:ClearRegistry(optionalCategoryName)
+    optionalCategoryName = strtrim(optionalCategoryName or "")
+    if optionalCategoryName == "" then
+        self.db.account.registeredPlayers = {}
+        self:Print(" [Info] All players removed from all categories")
+        return
+    end
+
+    for playerName, categoryConfig in pairs(self.db.account.registeredPlayers) do
+        if categoryConfig.categoryName == optionalCategoryName then
+            self.db.account.registeredPlayers[playerName] = nil
         end
-        return
     end
 
-    local categoryConfig = self.db.account.categories[optionalCategory]
-    if not categoryConfig then
-        self:Print(" [Error] Category '", optionalCategory, "' not found")
-        return
-    end
-
-    categoryConfig.players = {}
+    self:Print(" [Info] All players removed from category '", optionalCategoryName, "'")
 end
 
 -------------------------------------------------------------------------------
@@ -398,7 +412,7 @@ function SmartHealer:GetOptimalRank(spell, unit, possibleExplicitOverheal)
         bonus = bonus + buffpower
         mod = mod * buffmod
     end
-    
+
     local missing = UnitHealthMax(unit) - UnitHealth(unit)
     local max_rank = tonumber(libSC.data[spell].Rank)
 
@@ -413,6 +427,7 @@ function SmartHealer:GetOptimalRank(spell, unit, possibleExplicitOverheal)
 
         if assignedCategoryConfig then
             overheal = assignedCategoryConfig.overheal
+            self:Print(" [Info] Using overheal multiplier '", overheal, "' for player '", unitName, "' from category '", assignedCategoryConfig.categoryName, "'")
         else
             overheal = self.db.account.overheal
         end
@@ -565,7 +580,7 @@ local function getUnitString(unit)
     return nil
 end
 
-local function getProperTargetBasedOnMouseOver()
+local function getIntendedTargetForPFCastSpell()
     local unit = "mouseover"
     if not UnitExists(unit) then
         local frame = GetMouseFocus()
@@ -590,7 +605,7 @@ end
 function SmartHealer:pfUI_PFCast(msg)
     local spell, maxDesiredRank = libSC:GetRanklessSpellName(msg)
     if spell and maxDesiredRank == nil and libHC.Spells[spell] then
-        local unitstr = getProperTargetBasedOnMouseOver()
+        local unitstr = getIntendedTargetForPFCastSpell()
         if unitstr == nil then
             return
         end
