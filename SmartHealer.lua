@@ -78,7 +78,7 @@ function SmartHealer:OnEnable()
 
     self:RegisterChatCommand({ "/sh_toggle_player_in_category" }, function(arg)
         local category, substitutionsCount1 = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%1")
-        local playerName, substitutionsCount2 = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%2")
+        local playerName, _ = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%2")
 
         if substitutionsCount1 == 1 then
             SmartHealer:TogglePlayerInCategory(category, playerName)
@@ -407,7 +407,7 @@ function SmartHealer:GetOptimalRank(spell, unit, possibleExplicitOverheal)
     local rank = max_rank
     local overheal = possibleExplicitOverheal
     if not overheal then
-        local assignedCategoryConfig = nil
+        local assignedCategoryConfig
         local unitName = UnitName(unit)
         if unitName then
             assignedCategoryConfig = self.db.account.registeredPlayers[unitName]
