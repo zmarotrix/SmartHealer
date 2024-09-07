@@ -62,7 +62,6 @@ function SmartHealer:OnEnable()
         local overheal, substitutionsCount2 = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%2")
 
         if substitutionsCount1 == 1 then
-            category = string.gsub(category, "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
             SmartHealer:ConfigureOverhealing(category, overheal)
             return
         end
@@ -194,25 +193,24 @@ end
 --
 -------------------------------------------------------------------------------
 function SmartHealer:TogglePlayerInCategory(category, optionalPlayerName)
-    if not category or category == '' then
+    category = strtrim(category or "")
+    if category == "" then
         self:Print(" [Error] Category name not specified")
         return
     end
 
-    category = string.gsub(category, "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
     local categoryConfig = self.db.account.categories[category]
     if not categoryConfig then
         self:Print(" [Error] Category '", category, "' not found")
         return
     end
 
-    local playerName = optionalPlayerName
-    playerName = string.gsub(playerName or "", "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
-    if not playerName or playerName == '' then
+    local playerName = strtrim(optionalPlayerName or "")
+    if playerName == "" then
         playerName = UnitName("mouseover") or UnitName("target")
     end
 
-    if not playerName or playerName == '' then
+    if not playerName or playerName == "" then
         self:Print(" [Error] Player not specified")
         return
     end
@@ -236,7 +234,7 @@ end
 
 -- utility function to remove a player from a category
 function SmartHealer:TryRemovePlayerFromPreExistingCategory(playerName)
-    if not playerName or playerName == '' then
+    if not playerName or playerName == "" then
         self:Print(" [Error] Player name not specified")
         return nil
     end
@@ -279,12 +277,12 @@ end
 --
 -------------------------------------------------------------------------------
 function SmartHealer:ConfigureOverhealing(category, overheal)
-    if not overheal or overheal == '' then
+    if not overheal or overheal == "" then
         overheal = category
     end
 
     if overheal and type(overheal) == "string" then
-        overheal = string.gsub(overheal, "^%s*(.-)%s*$", "%1")
+        overheal = strtrim(overheal)
 
         local _, _, percent = string.find(overheal, "(%d+)%%")
         if percent then
@@ -295,16 +293,18 @@ function SmartHealer:ConfigureOverhealing(category, overheal)
     end
 
     if type(overheal) ~= "number" then
-        self:Print(" [Error] Invalid overheal multiplier supplied (type '", type(overheal), "' is not a number)")
+        self:Print(" [Error] Invalid overheal multiplier supplied (type '", type(overheal), "' is not a string-number or a number)")
         return
     end
 
     overheal = math.floor(overheal * 1000 + 0.5) / 1000
-    if category == nil then
+
+    category = strtrim(category or "")
+    if category == "" then
         self.db.account.overheal = overheal
         return
     end
-
+    
     self.db.account.categories[category] = self.db.account.categories[category] or {
         players = {},
         overheal = 1
@@ -348,12 +348,11 @@ end
 -- Handler function for /sh_delete_category <category>
 -------------------------------------------------------------------------------
 function SmartHealer:DeleteCategory(category)
-    if not category or category == '' then
+    category = strtrim(category)
+    if category == "" then
         self:Print(" [Error] Category name not specified")
         return
     end
-
-    category = string.gsub(category, "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
 
     self.db.account.categories[category] = nil
 end
@@ -362,7 +361,8 @@ end
 -- Handler function for /sh_clear_registry [<category>]
 -------------------------------------------------------------------------------
 function SmartHealer:ClearRegistry(optionalCategory)
-    if not optionalCategory or optionalCategory == '' then
+    optionalCategory = strtrim(optionalCategory)
+    if optionalCategory == "" then
         -- clear all registered players in all categories
         for _, config in pairs(self.db.account.categories) do
             config.players = {}
@@ -370,7 +370,6 @@ function SmartHealer:ClearRegistry(optionalCategory)
         return
     end
 
-    optionalCategory = string.gsub(optionalCategory, "^%s*(.-)%s*$", "%1") -- trim leading and trailing spaces
     local categoryConfig = self.db.account.categories[optionalCategory]
     if not categoryConfig then
         self:Print(" [Error] Category '", optionalCategory, "' not found")
