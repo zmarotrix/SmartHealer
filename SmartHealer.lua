@@ -388,7 +388,7 @@ end
 -------------------------------------------------------------------------------
 function SmartHealer:GetOptimalRank(spell, unit, possibleExplicitOverheal)
     if not libSC.data[spell] then
-        self:Print('smartheal rank not found')
+        self:Print(" [Error] Smartheal rank not found for spell '", spell, "'")
         return
     end
 
