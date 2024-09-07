@@ -24,8 +24,20 @@ installed, addon also checks if you have enough mana to cast spell of selected r
   Sets the new default overheal multiplier. When selecting spell rank, calculated heal must be higher than the missing HP * multiplier. Valid multiplier is number or percentage (1.15 or 115%).   
   If used without argument, prints current overheal multiplier.
 
-- `/sh_overheal   <category>   <multiplier>`
+- `/sh_overheal   [<category>]   <multiplier>`
   Sets the new overheal multiplier for <category>. If category is not found, it will be created.
+
+- `/sh_overheal_increment   [<delta>]`
+  Increments the overheal multiplier across the board by +<delta>. If no delta is provided, it will be assumed to be 0.1.
+
+- `/sh_overheal_decrement   [<delta>]`
+  Decrements the overheal multiplier across the board by -<delta>. If no delta is provided, it will be assumed to be 0.1.
+
+- `/sh_overheal_global_maximum   <multiplier>`
+  Sets the maximum multiplier% for all categories to <multiplier>.
+
+- `/sh_overheal_global_minimum   <multiplier>`
+  Sets the minimum multiplier% for all categories to <multiplier>.
 
 - `/sh_toggle_player_in_category   <category>    <player_name>`  
   Adds or removes player_name from tanks category. If player_name is not in the category, it will be added. If it is, it will be removed. If you omit player_name then the currently mouse-hovered

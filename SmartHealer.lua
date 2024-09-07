@@ -5,6 +5,9 @@ SmartHealer:RegisterDB("SmartHealerDB")
 SmartHealer:RegisterDefaults("account", {
     overheal = 1,
 
+    minimumOverheal = 0.6,
+    maximumOverheal = 2.2,
+
     categories = {
         ["maintanks"] = {
             overheal = 1.25,
@@ -28,6 +31,8 @@ SmartHealer:RegisterDefaults("account", {
 local libHC = AceLibrary("HealComm-1.0")
 local libIB = AceLibrary("ItemBonusLib-1.0")
 local libSC = AceLibrary("SpellCache-1.0")
+
+local _sessionOverhealingDelta = 0
 
 local _pfUIQuickCast_OnHeal_orig
 function SmartHealer:OnEnable()
@@ -54,7 +59,7 @@ function SmartHealer:OnEnable()
     end
 
     self:RegisterChatCommand({ "/heal" }, function(arg)
-        SmartHealer:CastHeal(arg)
+        self:CastHeal(arg)
     end, "SMARTHEALER")
 
     self:RegisterChatCommand({ "/sh_overheal" }, function(arg)
@@ -62,18 +67,18 @@ function SmartHealer:OnEnable()
         local overheal, substitutionsCount2 = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%2")
 
         if substitutionsCount1 == 1 then
-            SmartHealer:ConfigureOverhealing(category, overheal)
+            self:ConfigureOverhealing(category, overheal)
             return
         end
 
         category = nil
         overheal, substitutionsCount2 = string.gsub(arg, "^%s*(%S+)%s*$", "%1")
         if substitutionsCount2 == 1 then
-            SmartHealer:ConfigureOverhealing(overheal) -- set the default overhealing multiplier
+            self:ConfigureOverhealing(overheal) -- set the default overhealing multiplier
             return
         end
 
-        SmartHealer:PrintCurrentConfiguration()
+        self:PrintCurrentConfiguration()
     end, "SMARTOVERHEALER")
 
     self:RegisterChatCommand({ "/sh_toggle_player_in_category" }, function(arg)
@@ -81,23 +86,51 @@ function SmartHealer:OnEnable()
         local playerName, _ = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%2")
 
         if substitutionsCount1 == 1 then
-            SmartHealer:TogglePlayerInCategory(category, playerName)
+            self:TogglePlayerInCategory(category, playerName)
             return
         end
 
-        SmartHealer:TogglePlayerInCategory(arg) -- will get the player name from the mouseover target
+        self:TogglePlayerInCategory(arg) -- will get the player name from the mouseover target
     end, "SMARTHEALERTOGGLEPLAYERINCATEGORY")
 
+    self:RegisterChatCommand({ "/sh_overheal_global_maximum" }, function(value) -- todo  consolidate this into a method
+        value = tonumber(value)
+        if value < 0 then
+            self:Print(" [ERROR] Value must be a positive number")
+            return
+        end
+        
+        self.db.account.maximumOverheal = value
+    end, "SMARTHEALEROVERHEALGLOBALMAXIMUM")
+
+    self:RegisterChatCommand({ "/sh_overheal_global_minimum" }, function(value)
+        value = tonumber(value)
+        if value < 0 then
+            self:Print(" [ERROR] Value must be a positive number")
+            return
+        end
+
+        self.db.account.minimumOverheal = value
+    end, "SMARTHEALEROVERHEALGLOBALMINIMUM")
+
+    self:RegisterChatCommand({ "/sh_overheal_increment" }, function(value)
+        self:IncrementSessionOverhealDelta(value)
+    end, "SMARTHEALEROVERHEALINCREMENT")
+
+    self:RegisterChatCommand({ "/sh_overheal_decrement" }, function(value)
+        self:DecrementSessionOverhealDelta(value)
+    end, "SMARTHEALEROVERHEALDECREMENT")
+
     self:RegisterChatCommand({ "/sh_reset_all_categories" }, function()
-        SmartHealer:ResetAllCategoriesToDefaultOnes()
+        self:ResetAllCategoriesToDefaultOnes()
     end, "SMARTHEALERRESETALLCATEGORIES")
 
     self:RegisterChatCommand({ "/sh_delete_category" }, function(category)
-        SmartHealer:DeleteCategory(category)
+        self:DeleteCategory(category)
     end, "SMARTHEALERDELETECATEGORY")
 
     self:RegisterChatCommand({ "/sh_clear_players_registry" }, function(optionalCategory)
-        SmartHealer:ClearRegistry(optionalCategory)
+        self:ClearRegistry(optionalCategory)
     end, "SMARTHEALERCLEARPLAYERSREGISTRY")
 
     self:Print('loaded')
@@ -178,7 +211,7 @@ function SmartHealer:CastHeal(spellName)
     end
 end
 
-local function getUnitIdFromMouseHoverOverPartyOrRaidMember()
+function SmartHealer:getUnitIdFromMouseHoverOverPartyOrRaidMember()
     local frame = GetMouseFocus()
     if frame.label and frame.id then
         return frame.label .. frame.id
@@ -202,21 +235,21 @@ end
 function SmartHealer:TogglePlayerInCategory(categoryName, optionalPlayerName)
     categoryName = strtrim(categoryName or "")
     if categoryName == "" then
-        self:Print(" [Error] Category name not specified")
+        self:Print(" [ERROR] Category name not specified")
         return
     end
 
     local categoryConfig = self.db.account.categories[categoryName]
     if not categoryConfig then
-        self:Print(" [Error] Category '", categoryName, "' not found")
+        self:Print(" [ERROR] Category '", categoryName, "' not found")
         return
     end
 
     local playerName = strtrim(optionalPlayerName or "")
     if playerName == "" then
-        local mouseHoverOverUnitId = getUnitIdFromMouseHoverOverPartyOrRaidMember()
+        local mouseHoverOverUnitId = self:getUnitIdFromMouseHoverOverPartyOrRaidMember()
         if mouseHoverOverUnitId == nil then
-            self:Print(" [Info] No explicit player-name specified and no party/raid member is currently being hovered over with the mouse - nothing to do ...")
+            self:Print(" [INFO] No explicit player-name specified and no party/raid member is currently being hovered over with the mouse - nothing to do ...")
             return
         end
 
@@ -224,11 +257,11 @@ function SmartHealer:TogglePlayerInCategory(categoryName, optionalPlayerName)
     end
 
     if not playerName or playerName == "" then
-        self:Print(" [Error] Player not specified")
+        self:Print(" [ERROR] Player not specified")
         return
     end
 
-    local preExistingCategoryConfig = SmartHealer:TryRemovePlayerFromPreExistingCategory(playerName)
+    local preExistingCategoryConfig = self:TryRemovePlayerFromPreExistingCategory(playerName)
     if preExistingCategoryConfig ~= nil and preExistingCategoryConfig.categoryName == categoryName then
         self:Print("[-] Removed '", playerName, "' from category '", preExistingCategoryConfig.categoryName, "'")
         return
@@ -242,7 +275,7 @@ end
 -- utility function to remove a player from a category
 function SmartHealer:TryRemovePlayerFromPreExistingCategory(playerName)
     if not playerName or playerName == "" then
-        self:Print(" [Error] Player name not specified")
+        self:Print(" [ERROR] Player name not specified")
         return nil
     end
 
@@ -294,7 +327,7 @@ function SmartHealer:ConfigureOverhealing(categoryName, overheal)
     end
 
     if type(overheal) ~= "number" then
-        self:Print(" [Error] Invalid overheal multiplier supplied (type '", type(overheal), "' is not a string-number or a number)")
+        self:Print(" [ERROR] Invalid overheal multiplier supplied (type '", type(overheal), "' is not a string-number or a number)")
         return
     end
 
@@ -314,13 +347,31 @@ function SmartHealer:ConfigureOverhealing(categoryName, overheal)
     self.db.account.categories[categoryName].overheal = overheal
 end
 
+function SmartHealer:GetDefaultOverhealing()
+    return self.db.account.overheal + _sessionOverhealingDelta
+end
+
+function SmartHealer:GetProperOverhealingForPlayer(playerName)
+    local assignedCategoryConfig = self.db.account.registeredPlayers[playerName]
+    if assignedCategoryConfig then
+        -- self:Print(" [DEBUG] Using overheal multiplier '", overheal, "' for player '", playerName, "' from category '", assignedCategoryConfig.categoryName, "'")
+
+        return assignedCategoryConfig.overheal + _sessionOverhealingDelta
+    end
+
+    local overheal = self:GetDefaultOverhealing()
+    -- self:Print(" [DEBUG] Using default overheal multiplier '", overheal, "' for player '", playerName, "' based on the default overhealing value.")
+
+    return overheal
+end
+
 -------------------------------------------------------------------------------
 -- Handler function for /sh_overheal (without any parameters)
 -------------------------------------------------------------------------------
 function SmartHealer:PrintCurrentConfiguration()
     self:Print("Overheal multipliers:")
-    self:Print("- default: ", self.db.account.overheal, "(", self.db.account.overheal * 100, "%)")
-    for categoryName, config in pairs(self.db.account.categories) do
+    self:Print("- default: ", self:GetDefaultOverhealing(), "(", self:GetDefaultOverhealing() * 100, "%)")
+    for categoryName, _ in pairs(self.db.account.categories) do
         local playerNamesForCategory = {}
         for playerName, categoryConfig in pairs(self.db.account.registeredPlayers) do
             if categoryConfig.categoryName == categoryName then
@@ -330,17 +381,82 @@ function SmartHealer:PrintCurrentConfiguration()
 
         self:Print(
                 "- category '", categoryName, "': ",
-                config.overheal, "(", config.overheal * 100, "%) -> ",
-                table.getn(playerNamesForCategory) == 0 and "(no players registered)" or table.concat(playerNamesForCategory, ", ")
+                self:GetOverhealingForCategory(categoryName), "(", self:GetOverhealingForCategory(categoryName) * 100, "%) -> ",
+                table.getn(playerNamesForCategory) == 0
+                        and "(no players registered)"
+                        or table.concat(playerNamesForCategory, ", ")
         )
     end
+
+    self:Print("")
+    self:Print("Global overheal [min, max]: [", self.db.account.minimumOverheal, ", ", self.db.account.maximumOverheal, "]")
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_overheal_increment <value>
+-------------------------------------------------------------------------------
+function SmartHealer:IncrementSessionOverhealDelta(value)
+    value = value == nil
+            and 0.1
+            or value
+    
+    value = tonumber(value)
+    if value < 0 then
+        self:Print(" [ERROR] Value must be a positive number")
+        return
+    end
+
+    local newSessionOverhealingDelta = _sessionOverhealingDelta + value
+    newSessionOverhealingDelta = math.abs(newSessionOverhealingDelta - 0.001) < 0.01
+            and 0
+            or newSessionOverhealingDelta 
+    
+    if self.db.account.overheal + newSessionOverhealingDelta > self.db.account.maximumOverheal then
+        self:Print(" [ERROR] Cannot exceed max-overhealing-multiplier value '", self.db.account.maximumOverheal, "'")
+        return
+    end
+
+    _sessionOverhealingDelta = newSessionOverhealingDelta
+
+    self:Print(" [INFO] Default overhealing-multiplier incremented to ", self:GetDefaultOverhealing(), " (mod: ", _sessionOverhealingDelta, ")")
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_overheal_decrement <value>
+-------------------------------------------------------------------------------
+function SmartHealer:DecrementSessionOverhealDelta(value)
+    value = value == nil
+            and 0.1
+            or value
+
+    value = tonumber(value)
+    if value < 0 then
+        self:Print(" [ERROR] Value must be a positive number")
+        return
+    end
+
+    value = -1 * value
+
+    local newSessionOverhealingDelta = _sessionOverhealingDelta + value
+    newSessionOverhealingDelta = math.abs(newSessionOverhealingDelta - 0.001) < 0.01
+            and 0
+            or newSessionOverhealingDelta
+
+    if self.db.account.overheal + newSessionOverhealingDelta < self.db.account.minimumOverheal then
+        self:Print(" [ERROR] Cannot exceed min-overhealing-multiplier value '", self.db.account.minimumOverheal, "'")
+        return
+    end
+
+    _sessionOverhealingDelta = newSessionOverhealingDelta
+
+    self:Print(" [INFO] Default overhealing multiplier decremented to ", self:GetDefaultOverhealing(), " (mod: ", _sessionOverhealingDelta, ")")
 end
 
 -------------------------------------------------------------------------------
 -- Handler function for /sh_reset_all_categories
 -------------------------------------------------------------------------------
 function SmartHealer:ResetAllCategoriesToDefaultOnes()
-    SmartHealer:ClearRegistry() -- remove all players from all categories
+    self:ClearRegistry() -- remove all players from all categories
 
     self.db.account.categories = {
         ["maintanks"] = {
@@ -364,7 +480,7 @@ end
 function SmartHealer:DeleteCategory(category)
     category = strtrim(category)
     if category == "" then
-        self:Print(" [Error] Category name not specified")
+        self:Print(" [ERROR] Category name not specified")
         return
     end
 
@@ -378,7 +494,7 @@ function SmartHealer:ClearRegistry(optionalCategoryName)
     optionalCategoryName = strtrim(optionalCategoryName or "")
     if optionalCategoryName == "" then
         self.db.account.registeredPlayers = {}
-        self:Print(" [Info] All players removed from all categories")
+        self:Print(" [INFO] All players removed from all categories")
         return
     end
 
@@ -388,7 +504,7 @@ function SmartHealer:ClearRegistry(optionalCategoryName)
         end
     end
 
-    self:Print(" [Info] All players removed from category '", optionalCategoryName, "'")
+    self:Print(" [INFO] All players removed from category '", optionalCategoryName, "'")
 end
 
 -------------------------------------------------------------------------------
@@ -400,7 +516,7 @@ end
 -------------------------------------------------------------------------------
 function SmartHealer:GetOptimalRank(spell, unit, possibleExplicitOverheal)
     if not libSC.data[spell] then
-        self:Print(" [Error] Smartheal rank not found for spell '", spell, "'")
+        self:Print(" [ERROR] Smartheal rank not found for spell '", spell, "'")
         return
     end
 
@@ -419,18 +535,7 @@ function SmartHealer:GetOptimalRank(spell, unit, possibleExplicitOverheal)
     local rank = max_rank
     local overheal = possibleExplicitOverheal
     if not overheal then
-        local assignedCategoryConfig
-        local unitName = UnitName(unit)
-        if unitName then
-            assignedCategoryConfig = self.db.account.registeredPlayers[unitName]
-        end
-
-        if assignedCategoryConfig then
-            overheal = assignedCategoryConfig.overheal
-            self:Print(" [Info] Using overheal multiplier '", overheal, "' for player '", unitName, "' from category '", assignedCategoryConfig.categoryName, "'")
-        else
-            overheal = self.db.account.overheal
-        end
+        overheal = self:GetProperOverhealingForPlayer(UnitName(unit))
     end
 
     local mana = UnitMana("player")
@@ -570,7 +675,7 @@ end
 
 -- Try to find a valid (friendly) unitstring that can be used for
 -- SpellTargetUnit(unit) to avoid another target switch
-local function getUnitString(unit)
+function SmartHealer:getUnitString(unit)
     for _, unitstr in pairs(st_units) do
         if UnitIsUnit(unit, unitstr) then
             return unitstr
@@ -580,7 +685,7 @@ local function getUnitString(unit)
     return nil
 end
 
-local function getIntendedTargetForPFCastSpell()
+function SmartHealer:getIntendedTargetForPFCastSpell()
     local unit = "mouseover"
     if not UnitExists(unit) then
         local frame = GetMouseFocus()
@@ -599,18 +704,18 @@ local function getIntendedTargetForPFCastSpell()
     -- would cast on the target instead of the mouseover. However, if the mouseover
     -- is friendly and the target is not, we can try to obtain the best unitstring
     -- for the later SpellTargetUnit() call.
-    return ((not UnitCanAssist("player", "target") and UnitCanAssist("player", unit) and getUnitString(unit)) or "player")
+    return ((not UnitCanAssist("player", "target") and UnitCanAssist("player", unit) and self:getUnitString(unit)) or "player")
 end
 
 function SmartHealer:pfUI_PFCast(msg)
     local spell, maxDesiredRank = libSC:GetRanklessSpellName(msg)
     if spell and maxDesiredRank == nil and libHC.Spells[spell] then
-        local unitstr = getIntendedTargetForPFCastSpell()
+        local unitstr = self:getIntendedTargetForPFCastSpell()
         if unitstr == nil then
             return
         end
 
-        local optimalRank = SmartHealer:GetOptimalRank(msg, unitstr)
+        local optimalRank = self:GetOptimalRank(msg, unitstr)
         if optimalRank then
             if maxDesiredRank ~= nil then
                 -- if the user has specified a rank then consider it as the max possible rank
@@ -635,12 +740,12 @@ local _pfGetSpellIndex = pfUI
         and pfUI.api.libspell
         and pfUI.api.libspell.GetSpellIndex
 
-local function tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
+function SmartHealer:tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
     if not spellNameRaw or not libHC.Spells[spellNameRaw] then
         return nil, nil, nil -- fallback if the spell doesnt exist in the spellbook because for example the player hasnt specced for it 
     end
 
-    local optimalRank = SmartHealer:GetOptimalRank(spellNameRaw, intendedTarget)
+    local optimalRank = self:GetOptimalRank(spellNameRaw, intendedTarget)
     -- print("** [SmartHealer:pfUIQuickCast_OnHeal] maxDesiredRank='" .. tostring(maxDesiredRank) .. "'")
 
     if not optimalRank then
@@ -662,7 +767,7 @@ end
 function SmartHealer:pfUIQuickCast_OnHeal(spell, spellId, spellBookType, proper_target)
     local spellNameRaw, maxDesiredRank = libSC:GetRanklessSpellName(spell)
 
-    local rankedSpell, rankedSpellId, rankedSpellBookType = tryGetOptimalSpell(
+    local rankedSpell, rankedSpellId, rankedSpellBookType = self:tryGetOptimalSpell(
             spellNameRaw,
             maxDesiredRank,
             proper_target
