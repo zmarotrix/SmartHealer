@@ -6,8 +6,12 @@ SmartHealer:RegisterDefaults("account", {
     overheal = 1,
 
     categories = {
-        ["tanks"] = {
+        ["maintanks"] = {
             overheal = 1.25,
+            players = {},
+        },
+        ["offtanks"] = {
+            overheal = 1.15,
             players = {},
         },
         ["melees"] = {
@@ -265,8 +269,11 @@ end
 -- /sh_overheal 1.15   -- sets the default overheal multiplier to 115%
 -- /sh_overheal 115%   -- same as above
 --
--- /sh_overheal tanks 1.15   -- sets the overheal multiplier for tanks to 115%
--- /sh_overheal tanks 115%   -- same as above
+-- /sh_overheal maintanks 1.25   -- sets the overheal multiplier for maintanks to 115%
+-- /sh_overheal maintanks 125%   -- same as above
+--
+-- /sh_overheal offtanks 1.15   -- sets the overheal multiplier for offtanks to 115%
+-- /sh_overheal offtanks 115%   -- same as above
 --
 -- /sh_overheal     -- prints the current overheal multiplier for all categories
 --
@@ -322,8 +329,12 @@ end
 -------------------------------------------------------------------------------
 function SmartHealer:ResetAllCategoriesToDefaultOnes()
     self.db.account.categories = {
-        ["tanks"] = {
+        ["maintanks"] = {
             overheal = 1.25,
+            players = {},
+        },
+        ["offtanks"] = {
+            overheal = 1.15,
             players = {},
         },
         ["melees"] = {
