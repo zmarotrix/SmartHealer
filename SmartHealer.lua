@@ -121,23 +121,21 @@ end
 -- SmartHealer:CastSpell("Healing Wave;120%")		--/heal Healing Wave;120%
 -------------------------------------------------------------------------------
 function SmartHealer:CastHeal(spellName)
-    local possibleExplicitOverheal
-
-    -- self:Print("spellname: ", spellName, type(spellName), string.len(spellName))
     if not spellName or string.len(spellName) == 0 or type(spellName) ~= "string" then
         return
     end
 
-    spellName = string.gsub(spellName, "^%s*(.-)%s*$", "%1")     --strip leading and trailing space characters
-    spellName = string.gsub(spellName, "%s+", " ")               --replace all space character with actual space
+    spellName = string.gsub(strtrim(spellName), "%s+", " ") -- trim first and then replace all space character with a single space character
 
-    local _, _, arg = string.find(spellName, "[,;]%s*(.-)$")     --tries to find overheal multiplier (number after spell name, separated by "," or ";")
-    if arg then
-        local _, _, percent = string.find(arg, "(%d+)%%")
+    local _, _, explicitOverhealMultiplier = string.find(spellName, "[,;]%s*(.-)$") -- tries to find overheal multiplier (number after spell name, separated by "," or ";")
+
+    local possibleExplicitOverheal
+    if explicitOverhealMultiplier then
+        local _, _, percent = string.find(explicitOverhealMultiplier, "(%d+)%%")
         if percent then
             possibleExplicitOverheal = tonumber(percent) / 100
         else
-            possibleExplicitOverheal = tonumber(arg)
+            possibleExplicitOverheal = tonumber(explicitOverhealMultiplier)
         end
 
         spellName = string.gsub(spellName, "[,;].*", "")     --removes everything after first "," or ";"
