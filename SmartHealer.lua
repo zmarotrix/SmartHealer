@@ -51,7 +51,7 @@ function SmartHealer:OnEnable()
 
     self:RegisterChatCommand({ "/heal" }, function(arg)
         SmartHealer:CastHeal(arg)
-    end)
+    end, "SMARTHEALER")
 
     self:RegisterChatCommand({ "/sh_overheal" }, function(arg)
         local category, substitutionsCount1 = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%1")
@@ -71,7 +71,7 @@ function SmartHealer:OnEnable()
         end
 
         SmartHealer:PrintCurrentConfiguration()
-    end)
+    end, "SMARTOVERHEALER")
 
     self:RegisterChatCommand({ "/sh_toggle_player_in_category" }, function(arg)
         local category, substitutionsCount1 = string.gsub(arg, "^%s*(%S+)%s+(%S+)%s*$", "%1")
@@ -83,19 +83,19 @@ function SmartHealer:OnEnable()
         end
 
         SmartHealer:TogglePlayerInCategory(arg) -- will get the player name from the mouseover target
-    end)
+    end, "SMARTHEALER_TOGGLE_PLAYER_IN_CATEGORY")
 
     self:RegisterChatCommand({ "/sh_reset_all_categories" }, function()
         SmartHealer:ResetAllCategoriesToDefaultOnes()
-    end)
+    end, "SMARTHEALER_RESET_ALL_CATEGORIES")
 
     self:RegisterChatCommand({ "/sh_delete_category" }, function(category)
         SmartHealer:DeleteCategory(category)
-    end)
+    end, "SMARTHEALER_DELETE_CATEGORY")
 
     self:RegisterChatCommand({ "/sh_clear_registry" }, function(optionalCategory)
         SmartHealer:ClearRegistry(optionalCategory)
-    end)
+    end, "SMARTHEALER_CLEAR_REGISTRY")
 
     self:Print('loaded')
 end
