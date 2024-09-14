@@ -353,7 +353,7 @@ end
 
 function SmartHealer:GetProperOverhealingForPlayer(playerName)
     local assignedCategoryConfig = self.db.account.registeredPlayers[playerName]
-    if assignedCategoryConfig then
+    if assignedCategoryConfig and assignedCategoryConfig.overheal ~= nil then
         -- self:Print(" [DEBUG] Using overheal multiplier '", overheal, "' for player '", playerName, "' from category '", assignedCategoryConfig.categoryName, "'")
 
         return assignedCategoryConfig.overheal + _sessionOverhealingDelta
