@@ -129,24 +129,11 @@ function SmartHealer:OnEnable()
     end, "SMARTHEALERTOGGLEPLAYERINCATEGORY")
 
     self:RegisterChatCommand({ "/sh_overheal_global_maximum" }, function(value)
-        -- todo  consolidate this into a method
-        value = tonumber(value)
-        if value < 0 then
-            self:Print(" [ERROR] Value must be a positive number")
-            return
-        end
-
-        self.db.account.maximumOverheal = value
+        self:SetOverhealGlobalMaximum(value)
     end, "SMARTHEALEROVERHEALGLOBALMAXIMUM")
 
     self:RegisterChatCommand({ "/sh_overheal_global_minimum" }, function(value)
-        value = tonumber(value)
-        if value < 0 then
-            self:Print(" [ERROR] Value must be a positive number")
-            return
-        end
-
-        self.db.account.minimumOverheal = value
+        self:SetOverhealGlobalMinimum(value)
     end, "SMARTHEALEROVERHEALGLOBALMINIMUM")
 
     self:RegisterChatCommand({ "/sh_overheal_increment" }, function(value)
@@ -430,6 +417,32 @@ function SmartHealer:PrintCurrentConfiguration()
 
     self:Print("")
     self:Print("Global overheal [min, max]: [", self.db.account.minimumOverheal, ", ", self.db.account.maximumOverheal, "]")
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_overheal_global_maximum <value>
+-------------------------------------------------------------------------------
+function SmartHealer:SetOverhealGlobalMaximum(value)
+    value = tonumber(value)
+    if value < 0 then
+        self:Print(" [ERROR] Value must be a positive number")
+        return
+    end
+
+    self.db.account.maximumOverheal = value
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_overheal_global_minimum <value>
+-------------------------------------------------------------------------------
+function SmartHealer:SetOverhealGlobalMinimum(value)
+    value = tonumber(value)
+    if value < 0 then
+        self:Print(" [ERROR] Value must be a positive number")
+        return
+    end
+
+    self.db.account.minimumOverheal = value
 end
 
 -------------------------------------------------------------------------------
