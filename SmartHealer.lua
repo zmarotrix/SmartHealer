@@ -36,6 +36,39 @@ local libSC = AceLibrary("SpellCache-1.0")
 
 local _sessionOverhealingDelta = 0
 
+local function IsTruthy(value)
+    local type = type(value)
+    if type == "boolean" then
+        -- value is already a boolean  nothing to do 
+        return value
+    end
+
+    if type == "string" then
+        value = strlower(strtrim(value))
+        return value == "true" or value == "1" or value == "y" or value == "yes"
+    end
+
+    if type == "number" then
+        return value >= 1
+    end
+
+    return nil -- invalid value gets mapped to nil which acts like falsy
+end
+
+local function IsOptionallyTruthy(value, defaultValue)
+    if value == nil or value == "" then
+        -- value is an optional parameter   if not specified then default to true
+        return defaultValue
+    end
+
+    value = IsTruthy(value)
+    if value == nil then
+        return defaultValue
+    end
+
+    return value
+end
+
 local _pfUIQuickCast_OnHeal_orig
 function SmartHealer:OnEnable()
     if Clique and Clique.CastSpell then
@@ -485,23 +518,8 @@ end
 -- Handler function for /sh_interpret_spell_ranks_as_max_not_min <true/false>
 -------------------------------------------------------------------------------
 function SmartHealer:InterpretSpellRanksAsMaxNotMin(value)
-    local type = type(value)
-    if type == "nil" then
-        -- value is an optional parameter   if not specified then default to true
-        value = true
-
-    elseif type == "boolean" then
-        -- value is already a boolean
-        -- nothing to do 
-        
-    elseif type == "string" then
-        value = strlower(strtrim(value))
-        value = value == "" or value == "true" or value == "1" or value == "y" or value == "yes"
-
-    elseif type == "number" then
-        value = value >= 1
-
-    else
+    value = IsOptionallyTruthy(value, true)
+    if value == nil then
         self:Print(" [ERROR] Invalid value specified")
         return
     end
