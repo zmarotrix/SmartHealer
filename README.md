@@ -52,6 +52,11 @@ installed, addon also checks if you have enough mana to cast spell of selected r
 - `/sh_clear_players_registry  <category>`
   Clears all players registered in the given category (but the category is not deleted). If you omit the category, it will clear all categories of player-names.
 
+- `/sh_interpret_spell_ranks_as_max_not_min <true/false>`
+  Specifies whether to interpret the given spell ranks as maximum ranks, not minimum. The default interpretation is the 'maximum' flavour.<br/>
+  Setting this to 'true' (or any truthy value) will cause casting "Holy Light(Rank 3)" to autorank the spell up to rank 3 as appropriate.<br/>
+  Setting this to 'false' (or any non-truthy value) will cause casting "Holy Light(Rank 3)" to autorank the spell to rank 3 or above as appropriate.<br/>
+
 *NOTE:*  
 Spell name can contain a rank. If there is a rank, heal will be scaled but with the specified rank set a max-cap. This means that `/heal Healing Wave` will rank as needed all the way up to
 the maximum available rank that you know if necessary, but `/heal Healing Wave(Rank 3)` can only be ranked from 1 to 3.

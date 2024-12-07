@@ -8,6 +8,8 @@ SmartHealer:RegisterDefaults("account", {
     minimumOverheal = 0.6,
     maximumOverheal = 2.2,
 
+    interpretSpellRanksAsMaxNotMin = true,
+
     categories = {
         ["maintanks"] = {
             overheal = 1.25,
@@ -33,6 +35,39 @@ local libIB = AceLibrary("ItemBonusLib-1.0")
 local libSC = AceLibrary("SpellCache-1.0")
 
 local _sessionOverhealingDelta = 0
+
+local function IsTruthy(value)
+    local type = type(value)
+    if type == "boolean" then
+        -- value is already a boolean  nothing to do 
+        return value
+    end
+
+    if type == "string" then
+        value = strlower(strtrim(value))
+        return value == "true" or value == "1" or value == "y" or value == "yes"
+    end
+
+    if type == "number" then
+        return value >= 1
+    end
+
+    return nil -- invalid value gets mapped to nil which acts like falsy
+end
+
+local function IsOptionallyTruthy(value, defaultValue)
+    if value == nil or value == "" then
+        -- value is an optional parameter   if not specified then default to true
+        return defaultValue
+    end
+
+    value = IsTruthy(value)
+    if value == nil then
+        return defaultValue
+    end
+
+    return value
+end
 
 local _pfUIQuickCast_OnHeal_orig
 function SmartHealer:OnEnable()
@@ -93,24 +128,12 @@ function SmartHealer:OnEnable()
         self:TogglePlayerInCategory(arg) -- will get the player name from the mouseover target
     end, "SMARTHEALERTOGGLEPLAYERINCATEGORY")
 
-    self:RegisterChatCommand({ "/sh_overheal_global_maximum" }, function(value) -- todo  consolidate this into a method
-        value = tonumber(value)
-        if value < 0 then
-            self:Print(" [ERROR] Value must be a positive number")
-            return
-        end
-        
-        self.db.account.maximumOverheal = value
+    self:RegisterChatCommand({ "/sh_overheal_global_maximum" }, function(value)
+        self:SetOverhealGlobalMaximum(value)
     end, "SMARTHEALEROVERHEALGLOBALMAXIMUM")
 
     self:RegisterChatCommand({ "/sh_overheal_global_minimum" }, function(value)
-        value = tonumber(value)
-        if value < 0 then
-            self:Print(" [ERROR] Value must be a positive number")
-            return
-        end
-
-        self.db.account.minimumOverheal = value
+        self:SetOverhealGlobalMinimum(value)
     end, "SMARTHEALEROVERHEALGLOBALMINIMUM")
 
     self:RegisterChatCommand({ "/sh_overheal_increment" }, function(value)
@@ -132,6 +155,10 @@ function SmartHealer:OnEnable()
     self:RegisterChatCommand({ "/sh_clear_players_registry" }, function(optionalCategory)
         self:ClearRegistry(optionalCategory)
     end, "SMARTHEALERCLEARPLAYERSREGISTRY")
+
+    self:RegisterChatCommand({ "/sh_interpret_spell_ranks_as_max_not_min" }, function(value)
+        self:InterpretSpellRanksAsMaxNotMin(value)
+    end, "SMARTHEALERINTERPRETSPELLRANKSASMAXNOTMIN")
 
     self:Print('loaded')
 end
@@ -393,13 +420,39 @@ function SmartHealer:PrintCurrentConfiguration()
 end
 
 -------------------------------------------------------------------------------
+-- Handler function for /sh_overheal_global_maximum <value>
+-------------------------------------------------------------------------------
+function SmartHealer:SetOverhealGlobalMaximum(value)
+    value = tonumber(value)
+    if value < 0 then
+        self:Print(" [ERROR] Value must be a positive number")
+        return
+    end
+
+    self.db.account.maximumOverheal = value
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_overheal_global_minimum <value>
+-------------------------------------------------------------------------------
+function SmartHealer:SetOverhealGlobalMinimum(value)
+    value = tonumber(value)
+    if value < 0 then
+        self:Print(" [ERROR] Value must be a positive number")
+        return
+    end
+
+    self.db.account.minimumOverheal = value
+end
+
+-------------------------------------------------------------------------------
 -- Handler function for /sh_overheal_increment <value>
 -------------------------------------------------------------------------------
 function SmartHealer:IncrementSessionOverhealDelta(value)
     value = value == nil
             and 0.1
             or value
-    
+
     value = tonumber(value)
     if value < 0 then
         self:Print(" [ERROR] Value must be a positive number")
@@ -409,8 +462,8 @@ function SmartHealer:IncrementSessionOverhealDelta(value)
     local newSessionOverhealingDelta = _sessionOverhealingDelta + value
     newSessionOverhealingDelta = math.abs(newSessionOverhealingDelta - 0.001) < 0.01
             and 0
-            or newSessionOverhealingDelta 
-    
+            or newSessionOverhealingDelta
+
     if self.db.account.overheal + newSessionOverhealingDelta > self.db.account.maximumOverheal then
         self:Print(" [ERROR] Cannot exceed max-overhealing-multiplier value '", self.db.account.maximumOverheal, "'")
         return
@@ -472,6 +525,19 @@ function SmartHealer:ResetAllCategoriesToDefaultOnes()
             categoryName = "melees",
         },
     }
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_interpret_spell_ranks_as_max_not_min <true/false>
+-------------------------------------------------------------------------------
+function SmartHealer:InterpretSpellRanksAsMaxNotMin(value)
+    value = IsOptionallyTruthy(value, true)
+    if value == nil then
+        self:Print(" [ERROR] Invalid value specified")
+        return
+    end
+
+    self.db.account.interpretSpellRanksAsMaxNotMin = value
 end
 
 -------------------------------------------------------------------------------
@@ -740,7 +806,7 @@ local _pfGetSpellIndex = pfUI
         and pfUI.api.libspell
         and pfUI.api.libspell.GetSpellIndex
 
-function SmartHealer:tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
+function SmartHealer:tryGetOptimalSpell(spellNameRaw, explicitlySpecifiedRank, intendedTarget)
     if not spellNameRaw or not libHC.Spells[spellNameRaw] then
         return nil, nil, nil -- fallback if the spell doesnt exist in the spellbook because for example the player hasnt specced for it 
     end
@@ -752,9 +818,16 @@ function SmartHealer:tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTa
         return nil, nil, nil -- fallback if we can't find optimal rank
     end
 
-    if maxDesiredRank ~= nil then
-        -- if the user has specified a rank then consider it as the max possible rank
-        optimalRank = math.min(optimalRank, maxDesiredRank)
+    if explicitlySpecifiedRank ~= nil then
+        if self.db.account.interpretSpellRanksAsMaxNotMin == nil then
+            self.db.account.interpretSpellRanksAsMaxNotMin = true -- auto-migrate the db setting for users who just updated the addon
+        end
+
+        if self.db.account.interpretSpellRanksAsMaxNotMin then
+            optimalRank = math.min(optimalRank, explicitlySpecifiedRank) -- the optimalrank must not exceed the explicitly specified rank
+        else
+            optimalRank = math.max(optimalRank, explicitlySpecifiedRank) -- the optimalrank must not fall below the explicitly specified rank
+        end
     end
 
     local rankedSpell = libSC:GetSpellNameText(spellNameRaw, optimalRank)
@@ -765,11 +838,11 @@ function SmartHealer:tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTa
 end
 
 function SmartHealer:pfUIQuickCast_OnHeal(spell, spellId, spellBookType, proper_target)
-    local spellNameRaw, maxDesiredRank = libSC:GetRanklessSpellName(spell)
+    local spellNameRaw, explicitlySpecifiedRank = libSC:GetRanklessSpellName(spell)
 
     local rankedSpell, rankedSpellId, rankedSpellBookType = self:tryGetOptimalSpell(
             spellNameRaw,
-            maxDesiredRank,
+            explicitlySpecifiedRank,
             proper_target
     )
 
