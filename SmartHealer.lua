@@ -485,15 +485,20 @@ end
 -- Handler function for /sh_interpret_spell_ranks_as_max_not_min <true/false>
 -------------------------------------------------------------------------------
 function SmartHealer:InterpretSpellRanksAsMaxNotMin(value)
-    if value == nil or value == "" then
+    local type = type(value)
+    if type == "nil" then
         -- value is an optional parameter   if not specified then default to true
         value = true
 
-    elseif type(value) == "string" then
+    elseif type == "boolean" then
+        -- value is already a boolean
+        -- nothing to do 
+        
+    elseif type == "string" then
         value = strlower(strtrim(value))
-        value = value == "true" or value == "1" or value == "y"
+        value = value == "" or value == "true" or value == "1" or value == "y" or value == "yes"
 
-    elseif type(value) == "number" then
+    elseif type == "number" then
         value = value >= 1
 
     else
@@ -770,7 +775,7 @@ local _pfGetSpellIndex = pfUI
         and pfUI.api.libspell
         and pfUI.api.libspell.GetSpellIndex
 
-function SmartHealer:tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTarget)
+function SmartHealer:tryGetOptimalSpell(spellNameRaw, explicitlySpecifiedRank, intendedTarget)
     if not spellNameRaw or not libHC.Spells[spellNameRaw] then
         return nil, nil, nil -- fallback if the spell doesnt exist in the spellbook because for example the player hasnt specced for it 
     end
@@ -782,9 +787,16 @@ function SmartHealer:tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTa
         return nil, nil, nil -- fallback if we can't find optimal rank
     end
 
-    if maxDesiredRank ~= nil then
-        -- if the user has specified a rank then consider it as the max possible rank
-        optimalRank = math.min(optimalRank, maxDesiredRank)
+    if explicitlySpecifiedRank ~= nil then
+        if self.db.account.interpretSpellRanksAsMaxNotMin == nil then
+            self.db.account.interpretSpellRanksAsMaxNotMin = true -- auto-migrate the db setting for users who just updated the addon
+        end
+
+        if self.db.account.interpretSpellRanksAsMaxNotMin then
+            optimalRank = math.min(optimalRank, explicitlySpecifiedRank) -- the optimalrank must not exceed the explicitly specified rank
+        else
+            optimalRank = math.max(optimalRank, explicitlySpecifiedRank) -- the optimalrank must not fall below the explicitly specified rank
+        end
     end
 
     local rankedSpell = libSC:GetSpellNameText(spellNameRaw, optimalRank)
@@ -795,11 +807,11 @@ function SmartHealer:tryGetOptimalSpell(spellNameRaw, maxDesiredRank, intendedTa
 end
 
 function SmartHealer:pfUIQuickCast_OnHeal(spell, spellId, spellBookType, proper_target)
-    local spellNameRaw, maxDesiredRank = libSC:GetRanklessSpellName(spell)
+    local spellNameRaw, explicitlySpecifiedRank = libSC:GetRanklessSpellName(spell)
 
     local rankedSpell, rankedSpellId, rankedSpellBookType = self:tryGetOptimalSpell(
             spellNameRaw,
-            maxDesiredRank,
+            explicitlySpecifiedRank,
             proper_target
     )
 
