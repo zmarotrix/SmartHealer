@@ -8,6 +8,8 @@ SmartHealer:RegisterDefaults("account", {
     minimumOverheal = 0.6,
     maximumOverheal = 2.2,
 
+    interpretSpellRanksAsMaxNotMin = true,
+
     categories = {
         ["maintanks"] = {
             overheal = 1.25,
@@ -93,13 +95,14 @@ function SmartHealer:OnEnable()
         self:TogglePlayerInCategory(arg) -- will get the player name from the mouseover target
     end, "SMARTHEALERTOGGLEPLAYERINCATEGORY")
 
-    self:RegisterChatCommand({ "/sh_overheal_global_maximum" }, function(value) -- todo  consolidate this into a method
+    self:RegisterChatCommand({ "/sh_overheal_global_maximum" }, function(value)
+        -- todo  consolidate this into a method
         value = tonumber(value)
         if value < 0 then
             self:Print(" [ERROR] Value must be a positive number")
             return
         end
-        
+
         self.db.account.maximumOverheal = value
     end, "SMARTHEALEROVERHEALGLOBALMAXIMUM")
 
@@ -132,6 +135,10 @@ function SmartHealer:OnEnable()
     self:RegisterChatCommand({ "/sh_clear_players_registry" }, function(optionalCategory)
         self:ClearRegistry(optionalCategory)
     end, "SMARTHEALERCLEARPLAYERSREGISTRY")
+
+    self:RegisterChatCommand({ "/sh_interpret_spell_ranks_as_max_not_min" }, function(value)
+        self:InterpretSpellRanksAsMaxNotMin(value)
+    end, "SMARTHEALERINTERPRETSPELLRANKSASMAXNOTMIN")
 
     self:Print('loaded')
 end
@@ -399,7 +406,7 @@ function SmartHealer:IncrementSessionOverhealDelta(value)
     value = value == nil
             and 0.1
             or value
-    
+
     value = tonumber(value)
     if value < 0 then
         self:Print(" [ERROR] Value must be a positive number")
@@ -409,8 +416,8 @@ function SmartHealer:IncrementSessionOverhealDelta(value)
     local newSessionOverhealingDelta = _sessionOverhealingDelta + value
     newSessionOverhealingDelta = math.abs(newSessionOverhealingDelta - 0.001) < 0.01
             and 0
-            or newSessionOverhealingDelta 
-    
+            or newSessionOverhealingDelta
+
     if self.db.account.overheal + newSessionOverhealingDelta > self.db.account.maximumOverheal then
         self:Print(" [ERROR] Cannot exceed max-overhealing-multiplier value '", self.db.account.maximumOverheal, "'")
         return
@@ -472,6 +479,29 @@ function SmartHealer:ResetAllCategoriesToDefaultOnes()
             categoryName = "melees",
         },
     }
+end
+
+-------------------------------------------------------------------------------
+-- Handler function for /sh_interpret_spell_ranks_as_max_not_min <true/false>
+-------------------------------------------------------------------------------
+function SmartHealer:InterpretSpellRanksAsMaxNotMin(value)
+    if value == nil or value == "" then
+        -- value is an optional parameter   if not specified then default to true
+        value = true
+
+    elseif type(value) == "string" then
+        value = strlower(strtrim(value))
+        value = value == "true" or value == "1" or value == "y"
+
+    elseif type(value) == "number" then
+        value = value >= 1
+
+    else
+        self:Print(" [ERROR] Invalid value specified")
+        return
+    end
+
+    self.db.account.interpretSpellRanksAsMaxNotMin = value
 end
 
 -------------------------------------------------------------------------------
