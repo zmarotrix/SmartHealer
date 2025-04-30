@@ -97,7 +97,7 @@ function SmartHealer:CastHeal(spellName)
         end
     end
 
-    -- self:Print("spellname: ", spellName)
+    --self:Print("spellname: ", spellName)
 
     CastSpellByName(spellName, onSelf)
 
@@ -138,6 +138,8 @@ function SmartHealer:Overheal(value)
     end
 end
 
+local maxBuffs = 32;
+
 -------------------------------------------------------------------------------
 -- Function selects optimal spell rank to cast based on unit's missing HP
 -------------------------------------------------------------------------------
@@ -146,7 +148,7 @@ end
 -- overheal	- overheal multiplier. If nil, then using self.db.account.overheal.
 -------------------------------------------------------------------------------
 function SmartHealer:GetOptimalRank(spell, unit, overheal)
-    if not libSC.data[spell] then
+    if libSC.data[spell] == nil then
         self:Print('smartheal rank not found')
         return
     end
@@ -187,13 +189,21 @@ function SmartHealer:GetOptimalRank(spell, unit, overheal)
             end
         end
     end
-    --[[
-    self:Print(spell
-            .. ' rank ' .. rank
-            .. ' hp ' .. math.floor(spellData.averagehealnocrit)
-            .. ' hpm ' .. (spellData.averagehealnocrit / spellData.manacost)
-            .. ' mana ' .. spellData.manacost )
-    ]]
+	
+	-- Why does this API have no logical way to check if you have a specific buff?
+	index = 1
+	while (index <= maxBuffs) do
+		bIndex, _ = GetPlayerBuff(index, "HELPFUL|PASSIVE");
+		icon = GetPlayerBuffTexture(bIndex);
+		if (icon ~= nil) then
+			-- I hate this. This is the icon Clearcasting uses.
+			if (icon == "Interface\\Icons\\Spell_Shadow_ManaBurn") then
+				rank = max_rank
+			end
+		end
+		index = index + 1
+	end
+	
     return rank
 end
 

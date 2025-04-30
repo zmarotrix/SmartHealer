@@ -1064,6 +1064,58 @@ HealComm.Spells = {
 			return ((1062*gnMod)+(((2/3.5)*SpellPower)*0.5))
 		end;
 	};
+	[L["Rejuvenation"]] = {
+		[1] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((32*gnMod)+(((2/3.5)*SpellPower)*0.5*0.38))
+		end;
+		[2] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((56*gnMod)+(((2/3.5)*SpellPower)*0.5*0.513))
+		end;
+		[3] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((120*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
+		[4] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((184*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
+		[5] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((252*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
+		[6] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((316*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
+		[7] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((400*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
+		[8] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((504*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
+		[9] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((632*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
+		[10] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((784*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
+	};
 }
 
 local Resurrections = {
