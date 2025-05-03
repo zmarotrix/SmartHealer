@@ -36,6 +36,10 @@ local libSC = AceLibrary("SpellCache-1.0")
 
 local _sessionOverhealingDelta = 0
 
+local function _strtrim(input)
+    return strmatch(input, '^%s*(.*%S)') or ''
+end
+
 local function IsTruthy(value)
     local type = type(value)
     if type == "boolean" then
@@ -44,7 +48,7 @@ local function IsTruthy(value)
     end
 
     if type == "string" then
-        value = strlower(strtrim(value))
+        value = strlower(_strtrim(value))
         return value == "true" or value == "1" or value == "y" or value == "yes"
     end
 
@@ -57,7 +61,7 @@ end
 
 local function IsOptionallyTruthy(value, defaultValue)
     if value == nil or value == "" then
-        -- value is an optional parameter   if not specified then default to true
+        -- value is an optional parameter   if not specified then default to defaultValue
         return defaultValue
     end
 
@@ -185,7 +189,7 @@ function SmartHealer:CastHeal(spellName)
         return
     end
 
-    spellName = string.gsub(strtrim(spellName), "%s+", " ") -- trim the spellname and then replace all space character with a single space character
+    spellName = string.gsub(_strtrim(spellName), "%s+", " ") -- trim the spellname and then replace all space character with a single space character
 
     local _, _, explicitOverhealMultiplier = string.find(spellName, "[,;]%s*(.-)$") -- tries to find overheal multiplier (number after spell name, separated by "," or ";")
 
@@ -260,7 +264,7 @@ end
 --
 -------------------------------------------------------------------------------
 function SmartHealer:TogglePlayerInCategory(categoryName, optionalPlayerName)
-    categoryName = strtrim(categoryName or "")
+    categoryName = _strtrim(categoryName or "")
     if categoryName == "" then
         self:Print(" [ERROR] Category name not specified")
         return
@@ -272,7 +276,7 @@ function SmartHealer:TogglePlayerInCategory(categoryName, optionalPlayerName)
         return
     end
 
-    local playerName = strtrim(optionalPlayerName or "")
+    local playerName = _strtrim(optionalPlayerName or "")
     if playerName == "" then
         local mouseHoverOverUnitId = self:getUnitIdFromMouseHoverOverPartyOrRaidMember()
         if mouseHoverOverUnitId == nil then
@@ -343,7 +347,7 @@ function SmartHealer:ConfigureOverhealing(categoryName, overheal)
     end
 
     if overheal and type(overheal) == "string" then
-        overheal = strtrim(overheal)
+        overheal = _strtrim(overheal)
 
         local _, _, percent = string.find(overheal, "(%d+)%%")
         if percent then
@@ -360,7 +364,7 @@ function SmartHealer:ConfigureOverhealing(categoryName, overheal)
 
     overheal = math.floor(overheal * 1000 + 0.5) / 1000
 
-    categoryName = strtrim(categoryName or "")
+    categoryName = _strtrim(categoryName or "")
     if categoryName == "" then
         self.db.account.overheal = overheal
         return
@@ -544,7 +548,7 @@ end
 -- Handler function for /sh_delete_category <category>
 -------------------------------------------------------------------------------
 function SmartHealer:DeleteCategory(category)
-    category = strtrim(category)
+    category = _strtrim(category)
     if category == "" then
         self:Print(" [ERROR] Category name not specified")
         return
@@ -557,7 +561,7 @@ end
 -- Handler function for /sh_clear_players_registry [<category>]
 -------------------------------------------------------------------------------
 function SmartHealer:ClearRegistry(optionalCategoryName)
-    optionalCategoryName = strtrim(optionalCategoryName or "")
+    optionalCategoryName = _strtrim(optionalCategoryName or "")
     if optionalCategoryName == "" then
         self.db.account.registeredPlayers = {}
         self:Print(" [INFO] All players removed from all categories")
