@@ -149,10 +149,9 @@ local maxBuffs = 32;
 -------------------------------------------------------------------------------
 function SmartHealer:GetOptimalRank(spell, unit, overheal)
     if libSC.data[spell] == nil then
-        self:Print('smartheal rank not found')
+        self:Print('No Data found for spell: ' .. spell)
         return
     end
-
     local bonus, power, mod
     if TheoryCraft == nil then
         bonus = tonumber(libIB:GetBonus("HEAL"))
@@ -181,10 +180,17 @@ function SmartHealer:GetOptimalRank(spell, unit, overheal)
                 rank = i > 1 and i - 1 or 1
             end
         else
-            local heal = (libHC.Spells[spell][i](bonus) + power) * mod
-            if heal > (missing * overheal) then
-                rank = i
+            if libHC.Spells[spell] and libHC.Spells[spell][i] then
+                local heal = (libHC.Spells[spell][i](bonus) + power) * mod -- This is line 184
+                if heal > (missing * overheal) then
+                    rank = i
+                else
+                    break
+                end
             else
+                -- If we get here, it means the library is missing data for this spell.
+                -- We can't continue, so we break out of the loop.
+                self:Print("Warning: libHC missing data for " .. spell .. " Rank " .. i)
                 break
             end
         end

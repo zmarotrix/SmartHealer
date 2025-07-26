@@ -1115,6 +1115,11 @@ HealComm.Spells = {
 			local gnMod = 2*talentRank/100 + 1
 			return ((784*gnMod)+(((2/3.5)*SpellPower)*0.5))
 		end;
+		[11] = function (SpellPower)
+			local _,_,_,_,talentRank,_ = GetTalentInfo(3,12)
+			local gnMod = 2*talentRank/100 + 1
+			return ((888*gnMod)+(((2/3.5)*SpellPower)*0.5))
+		end;
 	};
 }
 
